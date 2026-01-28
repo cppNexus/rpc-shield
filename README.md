@@ -2,6 +2,9 @@
 
 **Rate Limiter & DDoS Filter для Web3 RPC Endpoints**
 ---
+<p align="center">
+  <img src="https://github.com/cppNexus/rpc-shield/raw/main/images/rpcshield-logo.jpg" alt="RpcShield Logo" width="300"/>
+</p>
 ## Описание
 
 RpcShield — это высокопроизводительный reverse proxy для Web3 RPC нод (Geth, Erigon и др.), обеспечивающий:
