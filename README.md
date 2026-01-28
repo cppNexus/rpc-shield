@@ -1,5 +1,5 @@
 # rpc-shield
-in development![image (4)](https://github.com/user-attachments/assets/13026d0f-4df6-433c-bc96-bb98eea2af78)
-<div align="center">
-  <img src="[[charts/polygon_gas_trend.png](https://github.com/user-attachments/assets/13026d0f-4df6-433c-bc96-bb98eea2af78)](https://private-user-images.githubusercontent.com/55871497/541880934-13026d0f-4df6-433c-bc96-bb98eea2af78.jpg?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3Njk2MzczNDMsIm5iZiI6MTc2OTYzNzA0MywicGF0aCI6Ii81NTg3MTQ5Ny81NDE4ODA5MzQtMTMwMjZkMGYtNGRmNi00MzNjLWJjOTYtYmI5OGVlYTJhZjc4LmpwZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNjAxMjglMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjYwMTI4VDIxNTA0M1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWVhMmY3N2ZmNWYzOGZmNjRlZGMzNjZmODY0ZGU3ZjBjZTVjM2NhZGVlMTA3NGM1OWM1YTg4Y2ZiMmRlODYwM2QmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.hm0kdCzNVqLjK7hQ2UcV_ZWSvcB_F9c6my3PkIscI6o)"  alt="Rpc Shield" width="50%" />
-</div>
+in development
+<p align="center">
+  <img src="https://github.com/cppNexus/rpc-shield/raw/main/images/rpcshield-logo.jpg" alt="RpcShield Logo" width="300"/>
+</p>
