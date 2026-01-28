@@ -1,0 +1,64 @@
+server:
+  host: "0.0.0.0"
+  port: 8545
+  mode: self-hosted
+
+rpc_backend:
+  url: "http://localhost:8546"
+  timeout_seconds: 30
+
+rate_limits:
+  default_ip_limit:
+    requests: 100
+    period: "1m"
+  
+  method_limits:
+    eth_call:
+      requests: 20
+      period: "1m"
+    eth_getLogs:
+      requests: 10
+      period: "1m"
+    eth_blockNumber:
+      requests: 60
+      period: "1m"
+    eth_getBalance:
+      requests: 30
+      period: "1m"
+    eth_sendRawTransaction:
+      requests: 5
+      period: "1m"
+
+api_keys:
+  demo_key_abc123:
+    tier: free
+    enabled: true
+    limits:
+      eth_call:
+        requests: 50
+        period: "1m"
+      eth_blockNumber:
+        requests: 100
+        period: "1m"
+  
+  premium_key_xyz789:
+    tier: pro
+    enabled: true
+    limits:
+      eth_call:
+        requests: 500
+        period: "1m"
+      eth_getLogs:
+        requests: 200
+        period: "1m"
+
+blocklist:
+  ips:
+    - "192.168.1.100"
+    - "10.0.0.50"
+  enable_auto_ban: true
+  auto_ban_threshold: 1000
+
+monitoring:
+  prometheus_port: 9090
+  log_level: "info"

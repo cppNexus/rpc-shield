@@ -1,0 +1,98 @@
+# Strict Test Configuration для проверки Rate Limiting
+# Используйте этот конфиг для тестирования что rate limiting работает
+
+server:
+  host: "0.0.0.0"
+  port: 8545
+  mode: self-hosted
+
+rpc_backend:
+  url: "http://localhost:8546"
+  timeout_seconds: 30
+
+# НИЗКИЕ ЛИМИТЫ для тестирования
+rate_limits:
+  # Дефолтный лимит для IP - очень низкий
+  default_ip_limit:
+    requests: 5          # Только 5 запросов в минуту
+    period: "1m"
+    burst:
+      size: 2            # + 2 дополнительных через burst
+      refill_rate: 1     # Восстановление 1 токена
+      refill_period: "10s"  # Каждые 10 секунд
+  
+  # Лимиты для конкретных методов
+  method_limits:
+    eth_blockNumber:
+      requests: 5
+      period: "1m"
+      burst:
+        size: 2
+        refill_rate: 1
+        refill_period: "10s"
+    
+    eth_call:
+      requests: 3
+      period: "1m"
+    
+    eth_getLogs:
+      requests: 2
+      period: "1m"
+  
+  group_limits: {}
+
+# Базовые method groups (без лимитов)
+method_groups:
+  read-only:
+    description: "Read-only methods"
+    category: read-only
+    methods:
+      - "eth_blockNumber"
+      - "eth_getBalance"
+      - "eth_call"
+      - "eth_chainId"
+
+# Тестовые API ключи
+api_keys:
+  test_key_low:
+    tier: free
+    enabled: true
+    limits:
+      eth_blockNumber:
+        requests: 3
+        period: "1m"
+  
+  test_key_high:
+    tier: pro
+    enabled: true
+    limits:
+      eth_blockNumber:
+        requests: 20
+        period: "1m"
+        burst:
+          size: 10
+          refill_rate: 2
+          refill_period: "10s"
+
+# Blocklist (пустой для тестов)
+blocklist:
+  ips: []
+  enable_auto_ban: false
+  auto_ban_threshold: 1000
+
+# Billing отключен для простоты
+billing:
+  enabled: false
+  hooks: []
+  webhook_timeout_ms: 5000
+
+# Мониторинг с debug уровнем
+monitoring:
+  prometheus_port: 9090
+  log_level: "debug"  # Важно для отладки
+
+# Hot reload отключен для тестов
+hot_reload:
+  enabled: false
+  watch_file: "config-test-strict.yaml"
+  debounce_ms: 1000
