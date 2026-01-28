@@ -1,8 +1,8 @@
 [package]
-name = "polymorph-proxy"
+name = "RpcShield"
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <you@example.com>"]
+authors = ["CppNexus cppnexus@proton.me"]
 description = "Rate Limiter / DDoS Filter для Web3 RPC Endpoint"
 license = "MIT"
 
