@@ -26,7 +26,7 @@ RpcShield — это высокопроизводительный reverse proxy 
 
 ```bash
 # Клонирование репозитория
-git clone https://github.com/your-org/polymorph-proxy.git
+git clone https://github.com/cppNexus/rpc-shield.git
 cd polymorph-proxy
 
 # Сборка проекта
@@ -262,8 +262,6 @@ MIT License - см. [LICENSE](LICENSE)
 
 ## 🔗 Ссылки
 
-- [Документация](https://docs.RpcShield
-
-.io) (скоро)
+- [Документация](https://docs.RpcShield.io) (скоро)
 - [Discord сообщество](https://discord.gg/...) (скоро)
 - [Примеры использования](./examples) (скоро)
