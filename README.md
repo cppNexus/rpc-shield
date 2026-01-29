@@ -5,6 +5,7 @@
 [![Status: As-Is](https://img.shields.io/badge/Status-As--Is-lightgrey)](README.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://github.com/cppNexus/rpc-shield/actions/workflows/ci.yml/badge.svg)](https://github.com/cppNexus/rpc-shield/actions/workflows/ci.yml)
+[![Release](https://github.com/cppNexus/rpc-shield/actions/workflows/release.yml/badge.svg)](https://github.com/cppNexus/rpc-shield/actions/workflows/release.yml)
 
 **Rate Limiter & DDoS Filter для Web3 RPC Endpoints**
 ---
