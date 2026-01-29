@@ -12,7 +12,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
-type LimiterMap = Arc<RwLock<HashMap<String, GovernorRateLimiter<NotKeyed, InMemoryState, DefaultClock>>>>;
+type LimiterMap =
+    Arc<RwLock<HashMap<String, GovernorRateLimiter<NotKeyed, InMemoryState, DefaultClock>>>>;
 
 pub struct RateLimiter {
     limiters: LimiterMap,
@@ -28,16 +29,12 @@ impl RateLimiter {
     }
 
     /// Проверяет, разрешён ли запрос для данного клиента и метода
-    pub async fn check_rate_limit(
-        &self,
-        identity: &ClientIdentity,
-        method: &str,
-    ) -> Result<bool> {
+    pub async fn check_rate_limit(&self, identity: &ClientIdentity, method: &str) -> Result<bool> {
         let key = self.make_key(identity, method);
         let limit_rule = self.get_limit_rule(identity, method);
 
         let mut limiters = self.limiters.write().await;
-        
+
         let limiter = limiters.entry(key.clone()).or_insert_with(|| {
             let quota = Self::parse_limit_rule(&limit_rule).unwrap_or_else(|_| {
                 // Fallback: 100 requests per minute
@@ -56,7 +53,7 @@ impl RateLimiter {
     fn get_limit_rule(&self, _identity: &ClientIdentity, method: &str) -> LimitRule {
         // Для API ключей используем кастомные лимиты (будет реализовано позже)
         // Пока используем method-specific или default лимиты
-        
+
         self.config
             .method_limits
             .get(method)
@@ -66,8 +63,8 @@ impl RateLimiter {
 
     fn parse_limit_rule(rule: &LimitRule) -> Result<Quota> {
         let duration = Self::parse_duration(&rule.period)?;
-        let requests = NonZeroU32::new(rule.requests)
-            .ok_or_else(|| anyhow!("Requests must be > 0"))?;
+        let requests =
+            NonZeroU32::new(rule.requests).ok_or_else(|| anyhow!("Requests must be > 0"))?;
 
         let quota = match duration {
             d if d == Duration::from_secs(1) => Quota::per_second(requests),
@@ -83,7 +80,7 @@ impl RateLimiter {
 
     fn parse_duration(period: &str) -> Result<Duration> {
         let period = period.trim();
-        
+
         if period.ends_with('s') {
             let secs: u64 = period.trim_end_matches('s').parse()?;
             Ok(Duration::from_secs(secs))
@@ -143,10 +140,16 @@ mod tests {
 
         // Первые 5 запросов должны пройти
         for _ in 0..5 {
-            assert!(limiter.check_rate_limit(&identity, "eth_call").await.unwrap());
+            assert!(limiter
+                .check_rate_limit(&identity, "eth_call")
+                .await
+                .unwrap());
         }
 
         // 6-й запрос должен быть отклонён
-        assert!(!limiter.check_rate_limit(&identity, "eth_call").await.unwrap());
+        assert!(!limiter
+            .check_rate_limit(&identity, "eth_call")
+            .await
+            .unwrap());
     }
 }

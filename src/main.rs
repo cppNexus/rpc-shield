@@ -74,9 +74,12 @@ async fn main() -> Result<()> {
 
     // Запуск сервера
     let addr = format!("{}:{}", config.server.host, config.server.port);
-    tracing::info!("rpc-shield
+    tracing::info!(
+        "rpc-shield
 
- starting on {}", addr);
+ starting on {}",
+        addr
+    );
     tracing::info!("Backend RPC: {}", config.rpc_backend.url);
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;

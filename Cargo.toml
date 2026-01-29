@@ -43,7 +43,7 @@ jsonwebtoken = "10.3.0"
 uuid = { version = "1.6", features = ["v4", "serde"] }
 
 # Stripe (for SaaS billing)
-stripe = { version = "0.0.5", optional = true }
+stripe = { package = "async-stripe", version = "0.41.0", features = ["runtime-tokio-hyper-rustls"], optional = true }
 
 # Monitoring & Logging
 tracing = "0.1"
