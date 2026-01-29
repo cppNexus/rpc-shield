@@ -1,6 +1,10 @@
 # RpcShield
 
+
+[![Rust 1.75+](https://img.shields.io/badge/Rust-1.75%2B-informational)](bin/spl-risk/Cargo.toml)
+[![Status: As-Is](https://img.shields.io/badge/Status-As--Is-lightgrey)](README.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![CI](https://github.com/cppNexus/rpc-shield/actions/workflows/ci.yml/badge.svg)](https://github.com/cppNexus/rpc-shield/actions/workflows/ci.yml)
 
 **Rate Limiter & DDoS Filter для Web3 RPC Endpoints**
 ---
