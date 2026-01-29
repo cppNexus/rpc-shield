@@ -1,0 +1,144 @@
+
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            use_cross: false
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            use_cross: true
+
+          # macOS
+          - os: macos-13
+            target: x86_64-apple-darwin
+            use_cross: false
+          - os: macos-14
+            target: aarch64-apple-darwin
+            use_cross: false
+
+          # Windows
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            use_cross: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross (Linux non-native targets)
+        if: matrix.use_cross
+        run: cargo install cross --locked
+
+      - name: Build (cargo)
+        if: ${{ !matrix.use_cross }}
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Build (cross)
+        if: matrix.use_cross
+        run: cross build --release --locked --target ${{ matrix.target }}
+
+      - name: Package artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REPO_NAME="${GITHUB_REPOSITORY##*/}"
+          VERSION="${GITHUB_REF_NAME}"
+          TARGET="${{ matrix.target }}"
+          OUT_DIR="dist"
+          mkdir -p "$OUT_DIR"
+
+          # Cargo binary name is usually the package/repo name (with hyphens preserved)
+          BIN_NAME="$REPO_NAME"
+
+          # Resolve built binary path
+          BIN_PATH="target/${TARGET}/release/${BIN_NAME}"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            BIN_PATH="${BIN_PATH}.exe"
+          fi
+
+          if [[ ! -f "$BIN_PATH" ]]; then
+            echo "ERROR: Built binary not found at: $BIN_PATH"
+            echo "If your binary name differs from the repo name, set BIN_NAME explicitly in this workflow."
+            ls -la "target/${TARGET}/release" || true
+            exit 1
+          fi
+
+          PKG_BASE="${REPO_NAME}-${VERSION}-${TARGET}"
+
+          mkdir -p "$PKG_BASE"
+          cp "$BIN_PATH" "$PKG_BASE/"
+
+          # Include license/notice if present
+          [[ -f LICENSE ]] && cp LICENSE "$PKG_BASE/" || true
+          [[ -f NOTICE ]] && cp NOTICE "$PKG_BASE/" || true
+          [[ -f NOTICE.md ]] && cp NOTICE.md "$PKG_BASE/" || true
+          [[ -f README.md ]] && cp README.md "$PKG_BASE/" || true
+
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            7z a "${OUT_DIR}/${PKG_BASE}.zip" "$PKG_BASE" >/dev/null
+            echo "ASSET_PATH=${OUT_DIR}/${PKG_BASE}.zip" >> "$GITHUB_ENV"
+          else
+            tar -czf "${OUT_DIR}/${PKG_BASE}.tar.gz" "$PKG_BASE"
+            echo "ASSET_PATH=${OUT_DIR}/${PKG_BASE}.tar.gz" >> "$GITHUB_ENV"
+          fi
+
+      - name: Upload build artifact (workflow)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ env.ASSET_PATH }}
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: List assets
+        run: ls -R dist
+
+      - name: Create/Update GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/**/**/*.zip
+            dist/**/**/*.tar.gz
+          generate_release_notes: true

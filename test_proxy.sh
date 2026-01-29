@@ -8,7 +8,7 @@ NC='\033[0m'
 
 PROXY_URL="http://localhost:8545"
 
-echo "🧪 Testing rpc-shield
+echo "Testing rpc-shield
 
  v2 (Enhanced)..."
 echo ""
