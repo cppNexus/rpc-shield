@@ -31,10 +31,10 @@ jobs:
             use_cross: true
 
           # macOS
-          - os: macos-13
+          - os: macos-15
             target: x86_64-apple-darwin
             use_cross: false
-          - os: macos-14
+          - os: macos-15
             target: aarch64-apple-darwin
             use_cross: false
 
