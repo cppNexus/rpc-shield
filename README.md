@@ -1,9 +1,11 @@
 # RpcShield
 
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
 **Rate Limiter & DDoS Filter для Web3 RPC Endpoints**
 ---
 <p align="center">
-  <img src="https://github.com/cppNexus/rpc-shield/raw/main/images/rpcshield-logo.jpg" alt="RpcShield Logo" width="300"/>
+  <img src="https://github.com/cppNexus/rpc-shield/raw/main/images/rpc-shield-logo.jpg" alt="rpc-shield Logo" width="300"/>
 </p>
 ## Описание
 
@@ -27,13 +29,13 @@ RpcShield — это высокопроизводительный reverse proxy 
 ```bash
 # Клонирование репозитория
 git clone https://github.com/cppNexus/rpc-shield.git
-cd polymorph-proxy
+cd rpc-shield
 
 # Сборка проекта
 cargo build --release
 
 # Запуск (self-hosted режим)
-./target/release/polymorph-proxy --config config.yaml
+./target/release/rpc-shield --config config.yaml
 ```
 
 Прокси будет доступен на `http://localhost:8545`
@@ -133,7 +135,7 @@ curl -X POST http://localhost:8545 \
 ### Self-Hosted
 
 ```bash
-./polymorph-proxy --config config.yaml --mode self-hosted
+./rpc-shield --config config.yaml --mode self-hosted
 ```
 
 - Конфигурация из YAML
@@ -143,7 +145,7 @@ curl -X POST http://localhost:8545 \
 ### SaaS (в разработке)
 
 ```bash
-./polymorph-proxy --config config.yaml --mode saas
+./rpc-shield --config config.yaml --mode saas
 ```
 
 - PostgreSQL для пользователей и биллинга
@@ -155,7 +157,7 @@ curl -X POST http://localhost:8545 \
 ```
 [Client/DApp/Bot]
        ↓
-[RpcShield
+[rpc-shield
 
 :8545]
    ├── Rate Limiter
@@ -258,10 +260,12 @@ cargo build --features saas
 
 ## Лицензия
 
-MIT License - см. [LICENSE](LICENSE)
+Apache License 2.0 — см. [LICENSE](LICENSE).
+
+Дополнительно см. файл [NOTICE](NOTICE.md).
 
 ## 🔗 Ссылки
 
-- [Документация](https://docs.RpcShield.io) (скоро)
+- [Документация](https://docs.rpc-shield.io) (скоро)
 - [Discord сообщество](https://discord.gg/...) (скоро)
 - [Примеры использования](./examples) (скоро)

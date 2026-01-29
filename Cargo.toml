@@ -1,5 +1,5 @@
 [package]
-name = "RpcShield"
+name = "rpc-shield"
 version = "0.1.0"
 edition = "2021"
 authors = ["CppNexus cppnexus@proton.me"]

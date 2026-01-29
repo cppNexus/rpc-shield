@@ -142,7 +142,7 @@ async fn forward_request(
 pub async fn health_check() -> impl IntoResponse {
     Json(serde_json::json!({
         "status": "ok",
-        "service": "polymorph-proxy"
+        "service": "rpc-shield"
     }))
 }
 

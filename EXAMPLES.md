@@ -1,4 +1,4 @@
-# Примеры использования RpcShield
+# Примеры использования rpc-shield
 
 
 
@@ -214,7 +214,7 @@ blocklist:
 ```yaml
 # prometheus.yml
 scrape_configs:
-  - job_name: 'polymorph-proxy'
+  - job_name: 'rpc-shield'
     static_configs:
       - targets: ['localhost:9090']
 ```
@@ -322,7 +322,7 @@ services:
     volumes:
       - geth-data:/root/.ethereum
 
-  polymorph-proxy:
+  rpc-shield:
     build: .
     ports:
       - "8545:8545"
@@ -349,9 +349,9 @@ RUN cargo build --release
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/polymorph-proxy /usr/local/bin/
+COPY --from=builder /app/target/release/rpc-shield /usr/local/bin/
 EXPOSE 8545 9090
-CMD ["polymorph-proxy"]
+CMD ["rpc-shield"]
 ```
 
 **Запуск:**
@@ -367,20 +367,20 @@ docker-compose up -d
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: polymorph-proxy
+  name: rpc-shield
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: polymorph-proxy
+      app: rpc-shield
   template:
     metadata:
       labels:
-        app: polymorph-proxy
+        app: rpc-shield
     spec:
       containers:
       - name: proxy
-        image: your-registry/polymorph-proxy:latest
+        image: your-registry/rpc-shield:latest
         ports:
         - containerPort: 8545
         - containerPort: 9090
@@ -400,11 +400,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: polymorph-proxy
+  name: rpc-shield
 spec:
   type: LoadBalancer
   selector:
-    app: polymorph-proxy
+    app: rpc-shield
   ports:
   - name: rpc
     port: 8545
@@ -513,7 +513,7 @@ def test_rate_limit():
     print(f"Rate Limited: {rate_limited_count}")
     
     assert rate_limited_count > 0, "Rate limiting не работает!"
-    print("✅ Rate limiting работает корректно")
+    print("Rate limiting работает корректно")
 
 if __name__ == "__main__":
     test_rate_limit()

@@ -74,7 +74,7 @@ async fn main() -> Result<()> {
 
     // Запуск сервера
     let addr = format!("{}:{}", config.server.host, config.server.port);
-    tracing::info!("RpcShield
+    tracing::info!("rpc-shield
 
  starting on {}", addr);
     tracing::info!("Backend RPC: {}", config.rpc_backend.url);

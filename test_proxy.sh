@@ -8,7 +8,7 @@ NC='\033[0m'
 
 PROXY_URL="http://localhost:8545"
 
-echo "🧪 Testing RpcShield
+echo "🧪 Testing rpc-shield
 
  v2 (Enhanced)..."
 echo ""
@@ -274,7 +274,7 @@ echo "Next steps:"
 if [ $RATE_LIMITED -eq 0 ]; then
   echo "  1. Check rate limit configuration"
   echo "  2. Try with config-test-strict.yaml"
-  echo "  3. Check logs: tail -f /tmp/polymorph-proxy.log"
+  echo "  3. Check logs: tail -f /tmp/rpc-shield.log"
 fi
 echo "  • Test advanced features: ./test_advanced.sh"
 echo "  • Check documentation: cat TEST_RESULTS_ANALYSIS.md"
