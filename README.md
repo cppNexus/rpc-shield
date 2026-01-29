@@ -5,7 +5,7 @@
 **Rate Limiter & DDoS Filter для Web3 RPC Endpoints**
 ---
 <p align="center">
-  <img src="https://github.com/cppNexus/rpc-shield/raw/main/images/rpc-shield-logo.jpg" alt="rpc-shield Logo" width="300"/>
+  <img src="https://github.com/cppNexus/rpc-shield/raw/main/images/rpcshield-logo.jpg" alt="rpc-shield Logo" width="300"/>
 </p>
 ## Описание
 
