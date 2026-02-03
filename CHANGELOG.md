@@ -2,13 +2,9 @@
 
 ## [Unreleased]
 
-### Added
-- Docker Compose quickstart (proxy + geth + Prometheus).
-- `.env.example` for port configuration.
-- English documentation parity (README/ARCHITECTURE/EXAMPLES) with RU docs.
-
 ### Changed
-- Prometheus exposed only via the Prometheus container (no direct metrics port).
+- Documentation updated to match current behavior (no admin or multi-tenancy features).
+- Deployment and configuration examples simplified to current scope.
 
 ## [0.1.0] - 2026-02-03
 
@@ -23,4 +19,3 @@
 
 ### Fixed
 - Prevent raw API keys from appearing in logs (fingerprints only).
-- Align documentation with actual behavior (no SaaS features in community).

@@ -119,6 +119,8 @@ api_keys:
       eth_getBlockByNumber: { requests: 100, period: "1m" }
 ```
 
+`tier` — это только ярлык для дефолтных лимитов и не даёт особых прав.
+
 **Использование в коде:**
 
 ```javascript
@@ -196,16 +198,9 @@ blocklist:
   ips:
     - "192.168.1.100"    # Замеченный в DDoS
     - "10.0.0.50"        # Подозрительный bot
-    - "172.16.0.0/12"    # Целая подсеть
-  enable_auto_ban: true
-  auto_ban_threshold: 1000  # ban после 1000 отказов в минуту
+  enable_auto_ban: false
+  auto_ban_threshold: 1000
 ```
-
-**Логика auto-ban (в разработке):**
-- Если IP превышает лимиты 1000 раз за период
-- Автоматическое добавление в blocklist
-- Уведомление админа
-- Возможность unban через Admin API
 
 ### 8. Мониторинг и метрики
 
@@ -223,14 +218,14 @@ scrape_configs:
 
 ```promql
 # RPS по методам
-rate(rpc_requests_total[1m])
+rate(rpc_shield_requests_total[1m])
 
 # Rate limit hit rate
-rate(rate_limit_exceeded_total[1m])
+rate(rpc_shield_requests_rate_limited_total[1m])
 
 # Latency percentiles
 histogram_quantile(0.99, 
-  rate(rpc_request_duration_seconds_bucket[5m])
+  rate(rpc_shield_request_duration_seconds_bucket[5m])
 )
 ```
 
@@ -276,7 +271,7 @@ rate_limits:
     period: "1m"  # Более щедрые лимиты для dev
 
 monitoring:
-  log_level: "debug"  # Подробные логи
+  log_level: "debug"  # Пока не используется; используйте RUST_LOG
 ```
 
 **prod-config.yaml:**
@@ -297,10 +292,10 @@ api_key_tiers:
     eth_call: { requests: 200, period: "1m" }
 
 blocklist:
-  enable_auto_ban: true  # Включить в prod
+  enable_auto_ban: false  # Auto-ban не реализован
 
 monitoring:
-  log_level: "info"  # Меньше логов
+  log_level: "info"  # Пока не используется; используйте RUST_LOG
   prometheus_port: 9090
 ```
 
@@ -311,7 +306,7 @@ monitoring:
 **docker-compose.yml:**
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   geth:
@@ -322,45 +317,30 @@ services:
       --http --http.addr=0.0.0.0 --http.port=8546
       --http.api=eth,net,web3
       --syncmode=snap
-      --mainnet
-    volumes:
-      - geth-data:/root/.ethereum
 
   rpc-shield:
     build: .
     ports:
       - "8545:8545"
-      - "9090:9090"
-    depends_on:
-      - geth
     volumes:
       - ./config.yaml:/app/config.yaml
-    environment:
-      - RUST_LOG=info
-    command: ["--config", "/app/config.yaml"]
+    command: ["/app/rpc-shield", "--config", "/app/config.yaml"]
+    depends_on:
+      - geth
 
-volumes:
-  geth-data:
-```
-
-**Dockerfile:**
-
-```dockerfile
-FROM rust:1.75 as builder
-WORKDIR /app
-COPY . .
-RUN cargo build --release
-
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/rpc-shield /usr/local/bin/
-EXPOSE 8545 9090
-CMD ["rpc-shield"]
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - rpc-shield
 ```
 
 **Запуск:**
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### 12. Kubernetes Deployment
@@ -479,7 +459,7 @@ export default function () {
 RUST_LOG=debug cargo run -- --config config.yaml
 
 # Отслеживание конкретного модуля
-RUST_LOG=polymorph_proxy::rate_limiter=trace cargo run
+RUST_LOG=rpc_shield::rate_limiter=trace cargo run -- --config config.yaml
 ```
 
 ### 15. Testing rate limits programmatically

@@ -119,6 +119,8 @@ api_keys:
       eth_getBlockByNumber: { requests: 100, period: "1m" }
 ```
 
+Tiers here are only labels for default limits; they do not imply special permissions.
+
 **Usage in code:**
 
 ```javascript
@@ -225,7 +227,7 @@ rate_limits:
     period: "1m"  # More permissive for dev
 
 monitoring:
-  log_level: "debug"  # Verbose logs
+  log_level: "debug"  # Currently unused; use RUST_LOG
 ```
 
 **prod-config.yaml:**
@@ -246,10 +248,10 @@ api_key_tiers:
     eth_call: { requests: 200, period: "1m" }
 
 blocklist:
-  enable_auto_ban: true  # Enable in prod
+  enable_auto_ban: false  # Auto-ban is not implemented
 
 monitoring:
-  log_level: "info"  # Less logs
+  log_level: "info"  # Currently unused; use RUST_LOG
   prometheus_port: 9090
 ```
 
@@ -260,7 +262,7 @@ monitoring:
 **docker-compose.yml:**
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   geth:
@@ -276,10 +278,18 @@ services:
     build: .
     ports:
       - "8545:8545"
-      - "9090:9090"
     volumes:
       - ./config.yaml:/app/config.yaml
     command: ["/app/rpc-shield", "--config", "/app/config.yaml"]
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - rpc-shield
 ```
 
 ### 12. Kubernetes Deployment

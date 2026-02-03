@@ -215,7 +215,7 @@ test_prometheus_metrics() {
     
     response=$(curl -s "$METRICS_URL")
     
-    if echo "$response" | grep -q "polymorph_proxy_requests_total"; then
+    if echo "$response" | grep -q "rpc_shield_requests_total"; then
         log_success "Prometheus metrics are exposed"
         return 0
     else

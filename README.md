@@ -6,7 +6,7 @@
 [![CI](https://github.com/cppNexus/rpc-shield/actions/workflows/ci.yml/badge.svg)](https://github.com/cppNexus/rpc-shield/actions/workflows/ci.yml)
 [![Release](https://github.com/cppNexus/rpc-shield/actions/workflows/release.yml/badge.svg)](https://github.com/cppNexus/rpc-shield/actions/workflows/release.yml)
 
-**Rate Limiter & DDoS Filter for Web3 RPC Endpoints**
+**Rate Limiter & JSON-RPC Proxy for Web3 RPC Endpoints**
 ---
 <p align="center">
   <img src="https://github.com/cppNexus/rpc-shield/raw/main/images/rpcshield-logo.jpg" alt="rpc-shield Logo" width="300"/>
@@ -14,12 +14,13 @@
 
 ## Overview
 
-RpcShield is a high‑performance reverse proxy for Web3 RPC nodes (Geth, Erigon, etc.) that provides:
+RpcShield is a reverse proxy in front of a Web3 JSON-RPC node (Geth, Erigon, Nethermind, etc.) that provides:
 
-- **Rate limiting** per IP and per API key
-- **DDoS protection** and malicious request filtering
-- **Monitoring and usage stats**
-- **Flexible per‑method limits**
+- **Rate limiting** per IP or per API key
+- **Per-method limits** for heavy RPC calls
+- **Static IP blocklist**
+- **Prometheus metrics** on a separate `/metrics` port
+- **Simple YAML configuration**
 
 Русская документация: `doc/README.ru.md`
 
@@ -40,7 +41,7 @@ cd rpc-shield
 # Build
 cargo build --release
 
-# Run (self-hosted)
+# Run
 ./target/release/rpc-shield --config config.yaml
 ```
 
@@ -52,10 +53,10 @@ The proxy will be available at `http://localhost:8545`.
 docker compose up -d
 ```
 
-Default ports are defined in `.env.example` (copy to `.env` if needed):
-- `RPC_SHIELD_PORT=8545`
-- `GETH_PORT=8546`
-- `PROMETHEUS_PORT=9090`
+The default compose file uses:
+- `8545` for the proxy
+- `8546` for the local geth node
+- `9090` for Prometheus
 
 ## Configuration
 
@@ -74,7 +75,6 @@ rate_limits:
   default_ip_limit:
     requests: 100
     period: "1m"
-  
   method_limits:
     eth_call:
       requests: 20
@@ -82,16 +82,25 @@ rate_limits:
     eth_getLogs:
       requests: 10
       period: "1m"
+
+blocklist:
+  ips: []
+  enable_auto_ban: false
+  auto_ban_threshold: 1000
+
+monitoring:
+  prometheus_port: 9090
+  log_level: "info"
 ```
 
-### Per‑method limits
+### Per-method limits
 
 You can set custom limits for specific RPC methods:
 
 | Method | Suggested limit | Reason |
 |-------|------------------|--------|
 | `eth_getLogs` | 10/min | Heavy DB scans |
-| `eth_call` | 20/min | CPU‑intensive |
+| `eth_call` | 20/min | CPU-intensive |
 | `eth_blockNumber` | 60/min | Light |
 | `eth_sendRawTransaction` | 5/min | Spam protection |
 
@@ -156,11 +165,13 @@ curl -X POST http://localhost:8545 \
 
 ### Tiers (free/pro/enterprise)
 
-In community edition, `tier` provides **default per‑method limits**. Priority order:
-1) `api_keys.<key>.limits` (per‑key override)
-2) `api_key_tiers.<tier>` (tier defaults)
-3) `rate_limits.method_limits`
-4) `rate_limits.default_ip_limit`
+`tier` is only a label for default limits. It does not imply special permissions.
+
+Priority order:
+1. `api_keys.<key>.limits` (per-key override)
+2. `api_key_tiers.<tier>` (tier defaults)
+3. `rate_limits.method_limits`
+4. `rate_limits.default_ip_limit`
 
 Example `api_key_tiers`:
 
@@ -187,51 +198,17 @@ blocklist:
   auto_ban_threshold: 1000
 ```
 
-**Note:** auto‑ban is not implemented yet; only static `ips` are enforced.
+**Note:** auto-ban is not implemented; only static `ips` are enforced.
 
 ## Rate Limit Headers
 
-When a request is rate‑limited, the proxy returns `429 Too Many Requests` and adds:
+When a request is rate-limited, the proxy returns `429 Too Many Requests` and adds:
 
 ```
 Retry-After: <seconds>
 ```
 
 `Retry-After` is rounded up to seconds and is always ≥ 1.
-
-## Modes
-
-### Self‑Hosted
-
-```bash
-./rpc-shield --config config.yaml
-```
-
-- YAML configuration
-- Ideal for private nodes
-
-## Architecture
-
-```
-[Client/DApp/Bot]
-       ↓
-[rpc-shield
-
-:8545]
-   ├── Rate Limiter
-   ├── Identity Resolver
-   └── Proxy Handler
-       ↓
-[RPC Node (Geth):8546]
-```
-
-### Core components
-
-- **Proxy Layer** – Axum HTTP server
-- **Rate Limiter** – token bucket (governor)
-- **Identity Resolver** – client detection via IP/API key
-- **Config Loader** – YAML config
-- **Metrics** – Prometheus `/metrics` endpoint
 
 ## Monitoring
 
@@ -243,40 +220,26 @@ curl http://localhost:8545/health
 
 ### Prometheus
 
-Metrics are exposed on port 9090 by default:
+Metrics are exposed on `monitoring.prometheus_port` (default `9090`):
 
-```
-# HELP rpc_shield_requests_total Total RPC requests
-# TYPE rpc_shield_requests_total counter
-rpc_shield_requests_total 1234
+- `rpc_shield_requests_total`
+- `rpc_shield_requests_allowed_total`
+- `rpc_shield_requests_rate_limited_total`
+- `rpc_shield_requests_blocked_total`
+- `rpc_shield_requests_auth_failed_total`
+- `rpc_shield_requests_upstream_fail_total`
+- `rpc_shield_requests_internal_fail_total`
+- `rpc_shield_request_duration_seconds`
 
-# HELP rpc_shield_requests_allowed_total Allowed RPC requests
-# TYPE rpc_shield_requests_allowed_total counter
-rpc_shield_requests_allowed_total 1200
+Logging is controlled via `RUST_LOG`. The `monitoring.log_level` field is currently not read by the binary.
 
-# HELP rpc_shield_requests_rate_limited_total Requests rejected by rate limiter
-# TYPE rpc_shield_requests_rate_limited_total counter
-rpc_shield_requests_rate_limited_total 20
+## Scope
 
-# HELP rpc_shield_requests_blocked_total Requests blocked by IP blocklist
-# TYPE rpc_shield_requests_blocked_total counter
-rpc_shield_requests_blocked_total 3
+RpcShield is intentionally small and focused. The following are **not** implemented:
 
-# HELP rpc_shield_requests_auth_failed_total Requests rejected due to invalid API key or auth scheme
-# TYPE rpc_shield_requests_auth_failed_total counter
-rpc_shield_requests_auth_failed_total 11
-
-# HELP rpc_shield_requests_upstream_fail_total Requests failed due to upstream errors
-# TYPE rpc_shield_requests_upstream_fail_total counter
-rpc_shield_requests_upstream_fail_total 2
-
-# HELP rpc_shield_requests_internal_fail_total Requests failed due to internal errors
-# TYPE rpc_shield_requests_internal_fail_total counter
-rpc_shield_requests_internal_fail_total 0
-
-# HELP rpc_shield_request_duration_seconds Proxy request duration in seconds
-# TYPE rpc_shield_request_duration_seconds histogram
-```
+- WebSocket proxying
+- Admin API
+- Multi-tenancy
 
 ## Development
 
@@ -292,57 +255,8 @@ cargo test
 RUST_LOG=debug cargo run -- --config config.yaml
 ```
 
-### Feature flags
-
-```bash
-# Self-hosted mode (default)
-cargo build --features self-hosted
-```
-
-## Roadmap
-
-### MVP (v0.1)
-- [x] HTTP proxy with JSON‑RPC
-- [x] Rate limiting per IP and method
-- [x] API keys
-- [x] YAML configuration
-- [x] Basic logging
-
-### v0.2 (in progress)
-- [x] IP blocklist
-- [x] Prometheus metrics
-- [ ] WebSocket passthrough
-- [ ] Redis integration
-
-### v0.3 (planned)
-- [ ] Admin REST API
-- [ ] PostgreSQL for billing
-- [ ] Web Dashboard (Tauri)
-- [ ] Auto‑ban thresholds
-
-### v1.0 (future)
-- [ ] Stripe/Crypto payments
-- [ ] ML‑based bot detection
-- [ ] Geo‑blocking
-- [ ] Email notifications
-
-## Contributing
-
-Pull requests are welcome. Key areas:
-
-- Performance optimizations
-- New rate limiters
-- Monitoring integrations
-- Documentation
-
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
 
 Additional notice: [NOTICE](NOTICE.md).
-
-## Links
-
-- Documentation: https://docs.rpc-shield.io (soon)
-- Discord: https://discord.gg/... (soon)
-- Examples: ./examples (soon)

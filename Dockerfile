@@ -16,7 +16,7 @@ COPY Cargo.toml Cargo.lock* ./
 COPY src ./src
 
 # Build release
-RUN cargo build --release --features saas
+RUN cargo build --release
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -26,6 +26,7 @@ WORKDIR /app
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
+    curl \
     libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -39,7 +40,7 @@ COPY config.yaml /app/config.yaml
 RUN mkdir -p /app/logs
 
 # Expose ports
-EXPOSE 8545 8555 9090
+EXPOSE 8545 9090
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

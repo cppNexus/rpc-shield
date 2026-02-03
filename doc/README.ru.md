@@ -1,25 +1,26 @@
 # RpcShield
 
-
-[![Rust 1.75+](https://img.shields.io/badge/Rust-1.75%2B-informational)](bin/spl-risk/Cargo.toml)
+[![Rust 1.75+](https://img.shields.io/badge/Rust-1.75%2B-informational)](Cargo.toml)
 [![Status: As-Is](https://img.shields.io/badge/Status-As--Is-lightgrey)](README.md)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://github.com/cppNexus/rpc-shield/actions/workflows/ci.yml/badge.svg)](https://github.com/cppNexus/rpc-shield/actions/workflows/ci.yml)
 [![Release](https://github.com/cppNexus/rpc-shield/actions/workflows/release.yml/badge.svg)](https://github.com/cppNexus/rpc-shield/actions/workflows/release.yml)
 
-**Rate Limiter & DDoS Filter для Web3 RPC Endpoints**
+**Rate Limiter & JSON-RPC Proxy для Web3 RPC Endpoints**
 ---
 <p align="center">
   <img src="https://github.com/cppNexus/rpc-shield/raw/main/images/rpcshield-logo.jpg" alt="rpc-shield Logo" width="300"/>
 </p>
+
 ## Описание
 
-RpcShield — это высокопроизводительный reverse proxy для Web3 RPC нод (Geth, Erigon и др.), обеспечивающий:
+RpcShield — это reverse proxy перед Web3 JSON-RPC нодой (Geth, Erigon, Nethermind и др.), который предоставляет:
 
-- **Rate Limiting** по IP-адресам и API-ключам
-- **Защита от DDoS** и вредоносных запросов
-- **Мониторинг и статистика** использования
-- **Гибкая конфигурация** лимитов для разных методов
+- **Rate limiting** по IP-адресам и API-ключам
+- **Лимиты по методам** для тяжёлых RPC вызовов
+- **Статический IP blocklist**
+- **Prometheus метрики** на отдельном порту `/metrics`
+- **Простую YAML-конфигурацию**
 
 English documentation: `README.md`
 
@@ -27,7 +28,7 @@ English documentation: `README.md`
 
 ### Требования
 
-- Rust 1.75+ 
+- Rust 1.75+
 - Работающая RPC нода (например, Geth на порту 8546)
 
 ### Установка и запуск
@@ -40,11 +41,22 @@ cd rpc-shield
 # Сборка проекта
 cargo build --release
 
-# Запуск (self-hosted режим)
+# Запуск
 ./target/release/rpc-shield --config config.yaml
 ```
 
-Прокси будет доступен на `http://localhost:8545`
+Прокси будет доступен на `http://localhost:8545`.
+
+### Docker Compose (proxy + geth + prometheus)
+
+```bash
+docker compose up -d
+```
+
+Дефолтный compose файл использует:
+- `8545` для прокси
+- `8546` для локальной geth ноды
+- `9090` для Prometheus
 
 ## Конфигурация
 
@@ -63,7 +75,6 @@ rate_limits:
   default_ip_limit:
     requests: 100
     period: "1m"
-  
   method_limits:
     eth_call:
       requests: 20
@@ -71,11 +82,20 @@ rate_limits:
     eth_getLogs:
       requests: 10
       period: "1m"
+
+blocklist:
+  ips: []
+  enable_auto_ban: false
+  auto_ban_threshold: 1000
+
+monitoring:
+  prometheus_port: 9090
+  log_level: "info"
 ```
 
 ### Лимиты по методам
 
-Вы можете настроить индивидуальные лимиты для каждого RPC метода:
+Можно задать индивидуальные лимиты для каждого RPC метода:
 
 | Метод | Рекомендованный лимит | Причина |
 |-------|----------------------|---------|
@@ -145,12 +165,13 @@ curl -X POST http://localhost:8545 \
 
 ### Про tiers (free/pro/enterprise)
 
-В community-версии `tier` используется для **дефолтных лимитов** ключа.  
+`tier` — это только ярлык для дефолтных лимитов. Он не связан с особыми правами.
+
 Приоритет такой:
-1) `api_keys.<key>.limits` (пер‑key override)
-2) `api_key_tiers.<tier>` (дефолт по tier)
-3) `rate_limits.method_limits`
-4) `rate_limits.default_ip_limit`
+1. `api_keys.<key>.limits` (пер‑key override)
+2. `api_key_tiers.<tier>` (дефолт по tier)
+3. `rate_limits.method_limits`
+4. `rate_limits.default_ip_limit`
 
 Пример `api_key_tiers`:
 
@@ -187,41 +208,7 @@ blocklist:
 Retry-After: <seconds>
 ```
 
-`Retry-After` — минимальное время ожидания перед повторной попыткой, округляется вверх до секунд и всегда ≥ 1.
-
-## Режимы работы
-
-### Self-Hosted
-
-```bash
-./rpc-shield --config config.yaml
-```
-
-- Конфигурация из YAML
-- Идеально для частных нод
-
-## Архитектура
-
-```
-[Client/DApp/Bot]
-       ↓
-[rpc-shield
-
-:8545]
-   ├── Rate Limiter
-   ├── Identity Resolver
-   └── Proxy Handler
-       ↓
-[RPC Node (Geth):8546]
-```
-
-### Основные компоненты
-
-- **Proxy Layer** - HTTP сервер на Axum
-- **Rate Limiter** - Token bucket алгоритм (governor)
-- **Identity Resolver** - Определение клиента по IP/API-ключу
-- **Config Loader** - Загрузка правил из YAML
-- **Metrics** - Экспорт Prometheus метрик на /metrics
+`Retry-After` округляется вверх до секунд и всегда ≥ 1.
 
 ## Мониторинг
 
@@ -233,40 +220,26 @@ curl http://localhost:8545/health
 
 ### Prometheus
 
-Метрики будут доступны на порту 9090:
+Метрики доступны на `monitoring.prometheus_port` (по умолчанию `9090`):
 
-```
-# HELP rpc_shield_requests_total Total RPC requests
-# TYPE rpc_shield_requests_total counter
-rpc_shield_requests_total 1234
+- `rpc_shield_requests_total`
+- `rpc_shield_requests_allowed_total`
+- `rpc_shield_requests_rate_limited_total`
+- `rpc_shield_requests_blocked_total`
+- `rpc_shield_requests_auth_failed_total`
+- `rpc_shield_requests_upstream_fail_total`
+- `rpc_shield_requests_internal_fail_total`
+- `rpc_shield_request_duration_seconds`
 
-# HELP rpc_shield_requests_allowed_total Allowed RPC requests
-# TYPE rpc_shield_requests_allowed_total counter
-rpc_shield_requests_allowed_total 1200
+Уровень логирования задаётся через `RUST_LOG`. Поле `monitoring.log_level` сейчас не используется приложением.
 
-# HELP rpc_shield_requests_rate_limited_total Requests rejected by rate limiter
-# TYPE rpc_shield_requests_rate_limited_total counter
-rpc_shield_requests_rate_limited_total 20
+## Область применения
 
-# HELP rpc_shield_requests_blocked_total Requests blocked by IP blocklist
-# TYPE rpc_shield_requests_blocked_total counter
-rpc_shield_requests_blocked_total 3
+RpcShield специально держится небольшим и сфокусированным. Следующего **нет**:
 
-# HELP rpc_shield_requests_auth_failed_total Requests rejected due to invalid API key or auth scheme
-# TYPE rpc_shield_requests_auth_failed_total counter
-rpc_shield_requests_auth_failed_total 11
-
-# HELP rpc_shield_requests_upstream_fail_total Requests failed due to upstream errors
-# TYPE rpc_shield_requests_upstream_fail_total counter
-rpc_shield_requests_upstream_fail_total 2
-
-# HELP rpc_shield_requests_internal_fail_total Requests failed due to internal errors
-# TYPE rpc_shield_requests_internal_fail_total counter
-rpc_shield_requests_internal_fail_total 0
-
-# HELP rpc_shield_request_duration_seconds Proxy request duration in seconds
-# TYPE rpc_shield_request_duration_seconds histogram
-```
+- WebSocket proxying
+- Admin API
+- Multi-tenancy
 
 ## Разработка
 
@@ -282,57 +255,8 @@ cargo test
 RUST_LOG=debug cargo run -- --config config.yaml
 ```
 
-### Feature flags
-
-```bash
-# Self-hosted режим (по умолчанию)
-cargo build --features self-hosted
-```
-
-## Roadmap
-
-### MVP (v0.1)
-- [x] HTTP Proxy с JSON-RPC
-- [x] Rate Limiting по IP и методам
-- [x] API-ключи
-- [x] YAML конфигурация
-- [x] Базовое логирование
-
-### v0.2 (в разработке)
-- [x] IP Blocklist
-- [x] Prometheus метрики
-- [ ] WebSocket passthrough
-- [ ] Redis интеграция
-
-### v0.3 (планируется)
-- [ ] Admin REST API
-- [ ] PostgreSQL для биллинга
-- [ ] Web Dashboard (Tauri)
-- [ ] Auto-ban по threshold
-
-### v1.0 (будущее)
-- [ ] Stripe/Crypto платежи
-- [ ] ML-based bot detection
-- [ ] Geo-blocking
-- [ ] Email уведомления
-
-## Вклад
-
-Мы приветствуем pull requests! Основные области:
-
-- Оптимизация производительности
-- Новые типы rate limiters
-- Интеграции с мониторингом
-- Документация
-
 ## Лицензия
 
 Apache License 2.0 — см. [LICENSE](LICENSE).
 
 Дополнительно см. файл [NOTICE](NOTICE.md).
-
-## 🔗 Ссылки
-
-- [Документация](https://docs.rpc-shield.io) (скоро)
-- [Discord сообщество](https://discord.gg/...) (скоро)
-- [Примеры использования](./examples) (скоро)

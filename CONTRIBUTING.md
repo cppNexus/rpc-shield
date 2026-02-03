@@ -30,8 +30,6 @@ This project adheres to a Code of Conduct. By participating, you are expected to
 
 - Rust 1.75 or later
 - Docker and Docker Compose
-- PostgreSQL 14+ (for SaaS features)
-- Redis 6+ (for distributed rate limiting)
 
 ### Local Development
 
@@ -50,7 +48,7 @@ cargo build
 cargo test
 
 # Start development environment
-docker-compose up -d
+docker compose up -d
 
 # Run in development mode
 cargo run -- --config config.yaml
@@ -76,7 +74,7 @@ cargo watch -x run
 - `refactor/` - Code refactoring
 - `test/` - Test additions or modifications
 
-Example: `feature/add-redis-support`
+Example: `feature/add-metrics-docs`
 
 ### Commit Messages
 
@@ -101,10 +99,10 @@ Types:
 
 Examples:
 ```
-feat(rate-limiter): add burst support for rate limiting
+feat(rate-limiter): add precedence tests
 
-Implements token bucket burst logic to allow temporary
-traffic spikes while maintaining overall rate limits.
+Adds tests that verify per-key and tier limits override
+global method and default IP limits.
 
 Closes #123
 ```
@@ -153,10 +151,15 @@ Example:
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_rate_limiter() {
+    #[tokio::test]
+    async fn test_rate_limiter() {
         let limiter = RateLimiter::new(config);
-        assert!(limiter.check_limit("client1").is_ok());
+        let identity = ClientIdentity::IpAddress("127.0.0.1".parse().unwrap());
+        let decision = limiter
+            .check_rate_limit_with_rule(&identity, "eth_call", None)
+            .await
+            .unwrap();
+        assert!(decision.allowed);
     }
 
     #[tokio::test]
@@ -305,15 +308,19 @@ info!(
 - Keep docs up-to-date with code changes
 
 ```rust
-/// Rate limiter with token bucket and burst support.
+/// Rate limiter with token bucket.
 ///
 /// # Examples
 ///
 /// ```
+/// use rpc_shield::identity::ClientIdentity;
 /// use rpc_shield::RateLimiter;
 ///
 /// let limiter = RateLimiter::new(config);
-/// let decision = limiter.check_limit("client1").await?;
+/// let identity = ClientIdentity::IpAddress("127.0.0.1".parse()?);
+/// let decision = limiter
+///     .check_rate_limit_with_rule(&identity, "eth_call", None)
+///     .await?;
 /// ```
 pub struct RateLimiter {
     // ...
@@ -324,20 +331,21 @@ pub struct RateLimiter {
 
 Update relevant documentation files:
 - `README.md` - For user-facing changes
-- `docs/API.md` - For API changes
-- `docs/CONFIGURATION.md` - For config changes
-- `docs/DEPLOYMENT.md` - For deployment changes
+- `CONFIGURATION.md` - For config changes
+- `DEPLOYMENT.md` - For deployment changes
+- `ARCHITECTURE.md` - For architectural changes
+- `EXAMPLES.md` - For usage examples
 
 ## Areas for Contribution
 
 We welcome contributions in these areas:
 
-- **Features**: WebSocket support, GraphQL support, etc.
+- **Rate limiting**: Correctness and edge cases
 - **Performance**: Optimizations, benchmarking
 - **Documentation**: Guides, examples, tutorials
 - **Testing**: More test coverage, load tests
 - **Bug fixes**: Check the issue tracker
-- **Integrations**: Cloud providers, monitoring tools
+- **Integrations**: Monitoring tooling and dashboards
 
 ## Questions?
 
