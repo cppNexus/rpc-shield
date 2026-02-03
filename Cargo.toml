@@ -49,6 +49,7 @@ stripe = { package = "async-stripe", version = "0.41.0", features = ["runtime-to
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 prometheus = "0.14"
+sha2 = "0.10"
 
 # Configuration
 config = "0.15"

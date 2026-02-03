@@ -6,11 +6,19 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::time::Instant;
 use std::sync::Arc;
 
+use crate::config::ApiKeyConfig;
 use crate::identity::ClientIdentity;
+use crate::identity::AuthError;
+use crate::metrics;
+use crate::metrics::Outcome;
 use crate::rate_limiter::RateLimiter;
+use std::collections::HashSet;
+use std::net::IpAddr;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcRequest {
@@ -42,6 +50,9 @@ pub struct ProxyState {
     pub rate_limiter: Arc<RateLimiter>,
     pub rpc_backend_url: String,
     pub http_client: reqwest::Client,
+    pub api_keys: HashMap<String, ApiKeyConfig>,
+    pub api_key_tiers: HashMap<crate::config::SubscriptionTier, HashMap<String, crate::config::LimitRule>>,
+    pub blocklist: HashSet<IpAddr>,
 }
 
 pub async fn proxy_handler(
@@ -50,76 +61,116 @@ pub async fn proxy_handler(
     headers: HeaderMap,
     Json(req): Json<JsonRpcRequest>,
 ) -> Response {
+    let started = Instant::now();
     let client_ip = addr.ip();
-    let identity = ClientIdentity::from_request(&headers, client_ip);
+    if state.blocklist.contains(&client_ip) {
+        let response = error_response(
+            StatusCode::FORBIDDEN,
+            -32001,
+            "IP blocked",
+            req.id.clone(),
+        );
+        metrics::record(Outcome::Blocked, started.elapsed());
+        return response;
+    }
+
+    let identity = match ClientIdentity::from_request(&headers, client_ip) {
+        Ok(identity) => identity,
+        Err(AuthError::InvalidScheme) => {
+            let response = error_response(
+                StatusCode::UNAUTHORIZED,
+                -32000,
+                "Invalid authorization scheme",
+                req.id.clone(),
+            );
+            metrics::record(Outcome::AuthFailed, started.elapsed());
+            return response;
+        }
+    };
+
+    if let Some(api_key) = identity.api_key_raw() {
+        match state.api_keys.get(api_key) {
+            Some(cfg) if cfg.enabled => {}
+            _ => {
+                let response = error_response(
+                    StatusCode::UNAUTHORIZED,
+                    -32000,
+                    "Invalid API key",
+                    req.id.clone(),
+                );
+                metrics::record(Outcome::AuthFailed, started.elapsed());
+                return response;
+            }
+        }
+    }
 
     // Проверка rate limit
+    let custom_rule = identity.api_key_raw().and_then(|key| {
+        state.api_keys.get(key).and_then(|cfg| {
+            if let Some(rule) = cfg.limits.get(&req.method) {
+                Some(rule.clone())
+            } else {
+                state
+                    .api_key_tiers
+                    .get(&cfg.tier)
+                    .and_then(|limits| limits.get(&req.method))
+                    .cloned()
+            }
+        })
+    });
     match state
         .rate_limiter
-        .check_rate_limit(&identity, &req.method)
+        .check_rate_limit_with_rule(&identity, &req.method, custom_rule)
         .await
     {
-        Ok(allowed) if allowed => {
+        Ok(decision) if decision.allowed => {
             // Rate limit пройден, проксируем запрос
             match forward_request(&state, &req).await {
-                Ok(response) => Json(response).into_response(),
+                Ok(response) => {
+                    metrics::record(Outcome::Allowed, started.elapsed());
+                    Json(response).into_response()
+                }
                 Err(e) => {
                     tracing::error!("Failed to forward request: {}", e);
-                    (
+                    metrics::record(Outcome::UpstreamFail, started.elapsed());
+                    error_response(
                         StatusCode::BAD_GATEWAY,
-                        Json(JsonRpcResponse {
-                            jsonrpc: "2.0".to_string(),
-                            result: None,
-                            error: Some(JsonRpcError {
-                                code: -32603,
-                                message: "Internal error".to_string(),
-                                data: None,
-                            }),
-                            id: req.id,
-                        }),
+                        -32007,
+                        "Upstream error",
+                        req.id,
                     )
-                        .into_response()
                 }
             }
         }
-        Ok(_) => {
+        Ok(decision) => {
             // Rate limit превышен
             tracing::warn!(
                 "Rate limit exceeded for {} on method {}",
                 identity.to_string(),
                 req.method
             );
-            (
+            let mut response = error_response(
                 StatusCode::TOO_MANY_REQUESTS,
-                Json(JsonRpcResponse {
-                    jsonrpc: "2.0".to_string(),
-                    result: None,
-                    error: Some(JsonRpcError {
-                        code: -32005,
-                        message: "Rate limit exceeded".to_string(),
-                        data: None,
-                    }),
-                    id: req.id,
-                }),
-            )
-                .into_response()
+                -32005,
+                "Rate limit exceeded",
+                req.id,
+            );
+            if let Some(wait) = decision.retry_after {
+                let seconds = wait.as_secs_f64().ceil().max(1.0) as u64;
+                response.headers_mut().insert(
+                    "Retry-After",
+                    seconds.to_string().parse().unwrap(),
+                );
+            }
+            metrics::record(Outcome::RateLimited, started.elapsed());
+            response
         }
         Err(e) => {
             tracing::error!("Rate limiter error: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(JsonRpcResponse {
-                    jsonrpc: "2.0".to_string(),
-                    result: None,
-                    error: Some(JsonRpcError {
-                        code: -32603,
-                        message: "Internal error".to_string(),
-                        data: None,
-                    }),
-                    id: req.id,
-                }),
-            )
-                .into_response()
+            let response =
+                error_response(StatusCode::INTERNAL_SERVER_ERROR, -32603, "Internal error", req.id);
+            metrics::record(Outcome::InternalFail, started.elapsed());
+            response
         }
     }
 }
@@ -135,6 +186,13 @@ async fn forward_request(
         .send()
         .await?;
 
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "Upstream responded with status {}",
+            response.status()
+        ));
+    }
+
     let rpc_response: JsonRpcResponse = response.json().await?;
     Ok(rpc_response)
 }
@@ -144,6 +202,23 @@ pub async fn health_check() -> impl IntoResponse {
         "status": "ok",
         "service": "rpc-shield"
     }))
+}
+
+fn error_response(status: StatusCode, code: i32, message: &str, id: Option<Value>) -> Response {
+    (
+        status,
+        Json(JsonRpcResponse {
+            jsonrpc: "2.0".to_string(),
+            result: None,
+            error: Some(JsonRpcError {
+                code,
+                message: message.to_string(),
+                data: None,
+            }),
+            id,
+        }),
+    )
+        .into_response()
 }
 
 #[cfg(test)]

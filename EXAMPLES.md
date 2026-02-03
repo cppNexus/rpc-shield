@@ -1,16 +1,16 @@
-# Примеры использования rpc-shield
+# RpcShield Usage Examples
 
+Русская версия: `doc/EXAMPLES.ru.md`
 
+## Basic Scenarios
 
-## Базовые сценарии
-
-### 1. Запуск с дефолтной конфигурацией
+### 1. Run with the default configuration
 
 ```bash
-# Запуск прокси
+# Start proxy
 cargo run --release -- --config config.yaml
 
-# В другом терминале - тестовый запрос
+# In another terminal - test request
 curl -X POST http://localhost:8545 \
   -H "Content-Type: application/json" \
   -d '{
@@ -21,7 +21,7 @@ curl -X POST http://localhost:8545 \
   }'
 ```
 
-**Ожидаемый ответ:**
+**Expected response:**
 ```json
 {
   "jsonrpc": "2.0",
@@ -30,30 +30,30 @@ curl -X POST http://localhost:8545 \
 }
 ```
 
-### 2. Использование с MetaMask
+### 2. Using MetaMask
 
-**Настройка MetaMask:**
+**MetaMask setup:**
 
-1. Открыть Settings → Networks → Add Network
-2. Заполнить:
+1. Open Settings → Networks → Add Network
+2. Fill in:
    - Network Name: `My Private RPC`
    - RPC URL: `http://localhost:8545`
-   - Chain ID: `1` (для mainnet)
+   - Chain ID: `1` (for mainnet)
    - Currency Symbol: `ETH`
 
-3. Сохранить и переключиться на эту сеть
+3. Save and switch to this network
 
-MetaMask теперь будет проходить через ваш прокси с rate limiting!
+MetaMask will now go through your proxy with rate limiting.
 
-### 3. Интеграция с Web3.js
+### 3. Web3.js integration
 
 ```javascript
 const Web3 = require('web3');
 
-// Подключение через прокси
+// Connect via proxy
 const web3 = new Web3('http://localhost:8545');
 
-// Все запросы теперь проходят rate limiting
+// All requests are rate limited
 async function getBlockNumber() {
   try {
     const blockNumber = await web3.eth.getBlockNumber();
@@ -68,12 +68,12 @@ async function getBlockNumber() {
 getBlockNumber();
 ```
 
-### 4. Использование с Ethers.js
+### 4. Ethers.js integration
 
 ```javascript
 const { ethers } = require('ethers');
 
-// Провайдер через прокси
+// Provider via proxy
 const provider = new ethers.JsonRpcProvider('http://localhost:8545');
 
 async function getBalance(address) {
@@ -90,9 +90,9 @@ async function getBalance(address) {
 getBalance('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb');
 ```
 
-## Продвинутые сценарии
+## Advanced Scenarios
 
-### 5. API-ключи для различных приложений
+### 5. API keys for different applications
 
 **config.yaml:**
 ```yaml
@@ -119,10 +119,10 @@ api_keys:
       eth_getBlockByNumber: { requests: 100, period: "1m" }
 ```
 
-**Использование в коде:**
+**Usage in code:**
 
 ```javascript
-// Frontend приложение
+// Frontend app
 const provider = new ethers.JsonRpcProvider(
   'http://localhost:8545',
   undefined,
@@ -145,139 +145,87 @@ const botProvider = new ethers.JsonRpcProvider(
 );
 ```
 
-### 6. Rate Limiting для специфичных методов
+### 6. Rate limiting for specific methods
 
-**Защита от тяжёлых запросов:**
+**Protect against heavy calls:**
 
 ```yaml
 rate_limits:
   method_limits:
-    # Очень тяжёлые запросы
+    # Very heavy queries
     eth_getLogs:
       requests: 5
       period: "1m"
     
-    # Тяжёлые вычисления
+    # Heavy computations
     eth_call:
       requests: 20
       period: "1m"
     
-    # Лёгкие запросы
+    # Normal methods
     eth_blockNumber:
       requests: 100
       period: "1m"
-    
-    # Защита от spam транзакций
-    eth_sendRawTransaction:
-      requests: 10
+    eth_chainId:
+      requests: 200
       period: "1m"
 ```
 
-**Тест защиты:**
+### 7. Blocking malicious IPs
 
-```bash
-# Этот скрипт быстро достигнет лимита eth_getLogs
-for i in {1..10}; do
-  curl -X POST http://localhost:8545 \
-    -H "Content-Type: application/json" \
-    -d '{
-      "jsonrpc": "2.0",
-      "method": "eth_getLogs",
-      "params": [{"fromBlock": "latest"}],
-      "id": '$i'
-    }'
-done
-```
-
-### 7. Блокировка вредоносных IP
-
+**blocklist config:**
 ```yaml
 blocklist:
   ips:
-    - "192.168.1.100"    # Замеченный в DDoS
-    - "10.0.0.50"        # Подозрительный bot
-    - "172.16.0.0/12"    # Целая подсеть
-  enable_auto_ban: true
-  auto_ban_threshold: 1000  # ban после 1000 отказов в минуту
+    - "123.45.67.89"  # Suspicious bot
+    - "98.76.54.32"   # DDoS attacker
+  enable_auto_ban: false
+  auto_ban_threshold: 1000
 ```
 
-**Логика auto-ban (в разработке):**
-- Если IP превышает лимиты 1000 раз за период
-- Автоматическое добавление в blocklist
-- Уведомление админа
-- Возможность unban через Admin API
+### 8. Monitoring & metrics
 
-### 8. Мониторинг и метрики
-
-**Prometheus scraping:**
-
+**Prometheus config:**
 ```yaml
-# prometheus.yml
 scrape_configs:
   - job_name: 'rpc-shield'
     static_configs:
       - targets: ['localhost:9090']
 ```
 
-**Grafana dashboard queries:**
+**Metrics to watch:**
+- `rpc_shield_requests_total`
+- `rpc_shield_requests_rate_limited_total`
+- `rpc_shield_request_duration_seconds`
+- `rpc_shield_requests_upstream_fail_total`
 
-```promql
-# RPS по методам
-rate(rpc_requests_total[1m])
+### 9. Failover setup with multiple nodes
 
-# Rate limit hit rate
-rate(rate_limit_exceeded_total[1m])
-
-# Latency percentiles
-histogram_quantile(0.99, 
-  rate(rpc_request_duration_seconds_bucket[5m])
-)
-```
-
-### 9. Failover setup с несколькими нодами
+**Backend load balancing (example):**
 
 ```yaml
-# config.yaml для primary прокси
 rpc_backend:
-  url: "http://geth-primary:8546"
-  timeout_seconds: 30
-
-# config-fallback.yaml для резервного
-rpc_backend:
-  url: "http://geth-secondary:8546"
+  url: "http://rpc-node-1:8546"
   timeout_seconds: 30
 ```
 
-**HAProxy перед проксями:**
+Use external load balancing (HAProxy/Nginx) to split traffic across multiple RPC nodes.
 
-```
-frontend rpc_frontend
-  bind *:8545
-  default_backend rpc_proxies
-
-backend rpc_proxies
-  balance roundrobin
-  option httpchk GET /health
-  server proxy1 localhost:8545 check
-  server proxy2 localhost:8546 check
-```
-
-### 10. Development vs Production конфиги
+### 10. Development vs Production configs
 
 **dev-config.yaml:**
 ```yaml
 server:
   host: "127.0.0.1"
   port: 8545
-  mode: self-hosted
 
 rate_limits:
   default_ip_limit:
     requests: 1000
-    period: "1m"  # Более щедрые лимиты для dev
+    period: "1m"  # More permissive for dev
 
 monitoring:
-  log_level: "debug"  # Подробные логи
+  log_level: "debug"  # Verbose logs
 ```
 
 **prod-config.yaml:**
@@ -285,18 +233,23 @@ monitoring:
 server:
   host: "0.0.0.0"
   port: 8545
-  mode: saas
 
 rate_limits:
   default_ip_limit:
     requests: 100
-    period: "1m"  # Строгие лимиты
+    period: "1m"  # Strict limits
+
+api_key_tiers:
+  free:
+    eth_call: { requests: 20, period: "1m" }
+  pro:
+    eth_call: { requests: 200, period: "1m" }
 
 blocklist:
-  enable_auto_ban: true  # Включить в prod
+  enable_auto_ban: true  # Enable in prod
 
 monitoring:
-  log_level: "info"  # Меньше логов
+  log_level: "info"  # Less logs
   prometheus_port: 9090
 ```
 
@@ -318,50 +271,20 @@ services:
       --http --http.addr=0.0.0.0 --http.port=8546
       --http.api=eth,net,web3
       --syncmode=snap
-      --mainnet
-    volumes:
-      - geth-data:/root/.ethereum
 
   rpc-shield:
     build: .
     ports:
       - "8545:8545"
       - "9090:9090"
-    depends_on:
-      - geth
     volumes:
       - ./config.yaml:/app/config.yaml
-    environment:
-      - RUST_LOG=info
-    command: ["--config", "/app/config.yaml"]
-
-volumes:
-  geth-data:
-```
-
-**Dockerfile:**
-
-```dockerfile
-FROM rust:1.75 as builder
-WORKDIR /app
-COPY . .
-RUN cargo build --release
-
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/rpc-shield /usr/local/bin/
-EXPOSE 8545 9090
-CMD ["rpc-shield"]
-```
-
-**Запуск:**
-```bash
-docker-compose up -d
+    command: ["/app/rpc-shield", "--config", "/app/config.yaml"]
 ```
 
 ### 12. Kubernetes Deployment
 
-**k8s-deployment.yaml:**
+**Deployment example:**
 
 ```yaml
 apiVersion: apps/v1
@@ -369,7 +292,7 @@ kind: Deployment
 metadata:
   name: rpc-shield
 spec:
-  replicas: 3
+  replicas: 2
   selector:
     matchLabels:
       app: rpc-shield
@@ -379,191 +302,99 @@ spec:
         app: rpc-shield
     spec:
       containers:
-      - name: proxy
-        image: your-registry/rpc-shield:latest
-        ports:
-        - containerPort: 8545
-        - containerPort: 9090
-        env:
-        - name: RUST_LOG
-          value: "info"
-        volumeMounts:
-        - name: config
-          mountPath: /app/config.yaml
-          subPath: config.yaml
+        - name: rpc-shield
+          image: rpc-shield:latest
+          ports:
+            - containerPort: 8545
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
       volumes:
-      - name: config
-        configMap:
-          name: proxy-config
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: rpc-shield
-spec:
-  type: LoadBalancer
-  selector:
-    app: rpc-shield
-  ports:
-  - name: rpc
-    port: 8545
-    targetPort: 8545
-  - name: metrics
-    port: 9090
-    targetPort: 9090
+        - name: config
+          configMap:
+            name: rpc-shield-config
 ```
 
-## Тестирование и Debugging
+## Testing & Debugging
 
 ### 13. Load Testing
 
-**Apache Bench:**
+**Using vegeta:**
+
 ```bash
-# 1000 запросов, 10 параллельных соединений
-ab -n 1000 -c 10 -p request.json -T application/json \
-   http://localhost:8545/
+echo "POST http://localhost:8545" | vegeta attack -duration=30s -rate=100 | vegeta report
 ```
 
-**request.json:**
-```json
-{
-  "jsonrpc": "2.0",
-  "method": "eth_blockNumber",
-  "params": [],
-  "id": 1
-}
-```
+**Using k6:**
 
-**k6 script:**
 ```javascript
 import http from 'k6/http';
-import { check } from 'k6';
+import { sleep } from 'k6';
 
 export const options = {
   vus: 50,
-  duration: '30s',
+  duration: '30s'
 };
 
 export default function () {
-  const payload = JSON.stringify({
+  http.post('http://localhost:8545', JSON.stringify({
     jsonrpc: '2.0',
     method: 'eth_blockNumber',
     params: [],
-    id: 1,
+    id: 1
+  }), {
+    headers: { 'Content-Type': 'application/json' }
   });
-
-  const params = {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  };
-
-  const res = http.post('http://localhost:8545', payload, params);
-  
-  check(res, {
-    'status is 200': (r) => r.status === 200,
-    'not rate limited': (r) => !r.body.includes('Rate limit'),
-  });
+  sleep(0.1);
 }
 ```
 
 ### 14. Debug mode
 
 ```bash
-# Запуск с debug логами
 RUST_LOG=debug cargo run -- --config config.yaml
-
-# Отслеживание конкретного модуля
-RUST_LOG=polymorph_proxy::rate_limiter=trace cargo run
 ```
 
 ### 15. Testing rate limits programmatically
 
-```python
-import requests
-import time
-
-PROXY_URL = "http://localhost:8545"
-
-def test_rate_limit():
-    """Проверяет, что rate limit работает"""
-    payload = {
-        "jsonrpc": "2.0",
-        "method": "eth_blockNumber",
-        "params": [],
-        "id": 1
+```javascript
+async function spamRequests() {
+  for (let i = 0; i < 100; i++) {
+    try {
+      await provider.send('eth_blockNumber', []);
+    } catch (err) {
+      if (err.code === -32005) {
+        console.log('Rate limited at request', i);
+        break;
+      }
     }
-    
-    success_count = 0
-    rate_limited_count = 0
-    
-    # Отправляем 150 запросов (лимит 100/мин)
-    for i in range(150):
-        response = requests.post(PROXY_URL, json=payload)
-        
-        if response.status_code == 200:
-            data = response.json()
-            if 'result' in data:
-                success_count += 1
-        elif response.status_code == 429:
-            rate_limited_count += 1
-    
-    print(f"Success: {success_count}")
-    print(f"Rate Limited: {rate_limited_count}")
-    
-    assert rate_limited_count > 0, "Rate limiting не работает!"
-    print("Rate limiting работает корректно")
-
-if __name__ == "__main__":
-    test_rate_limit()
+  }
+}
 ```
 
-## Интеграция с популярными инструментами
+## Integrations with popular tools
 
-### 16. Hardhat интеграция
+### 16. Hardhat integration
 
-**hardhat.config.js:**
 ```javascript
 module.exports = {
   networks: {
-    custom: {
-      url: "http://localhost:8545",
-      accounts: [PRIVATE_KEY],
-      // Все Hardhat запросы проходят через прокси!
+    rpcshield: {
+      url: 'http://localhost:8545'
     }
   }
 };
 ```
 
-### 17. Foundry интеграция
+### 17. Foundry integration
 
-```bash
-# .env файл
-RPC_URL=http://localhost:8545
-
-# Использование
-forge script Script --rpc-url $RPC_URL --broadcast
+```toml
+[rpc_endpoints]
+rpcshield = "http://localhost:8545"
 ```
 
-### 18. Alchemy/Infura замена
+### 18. Alchemy/Infura replacement
 
-**Было:**
-```javascript
-const provider = new ethers.JsonRpcProvider(
-  'https://eth-mainnet.alchemyapi.io/v2/YOUR_KEY'
-);
-```
-
-**Стало:**
-```javascript
-const provider = new ethers.JsonRpcProvider(
-  'http://your-proxy.com:8545',
-  undefined,
-  {
-    headers: { 'Authorization': 'Bearer YOUR_PROXY_KEY' }
-  }
-);
-```
-
-Теперь у вас полный контроль над rate limiting и мониторингом!
+Replace your Alchemy/Infura endpoint URL with `http://localhost:8545` in your app config.

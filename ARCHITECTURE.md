@@ -1,12 +1,12 @@
-# 🏗️ Архитектура rpc-shield
+# RpcShield Architecture
 
+This document provides a full overview of the community edition architecture.
 
+Русская версия: `doc/ARCHITECTURE.ru.md`
 
-## Обзор системы
+## System Overview
 
-rpc-shield
-
- построен на модульной архитектуре с четким разделением ответственности между компонентами.
+rpc-shield is built on a modular architecture with a clear separation of responsibilities.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -16,17 +16,15 @@ rpc-shield
                   │ HTTP/JSON-RPC
                   ↓
 ┌─────────────────────────────────────────────────────────┐
-│              rpc-shield
-
- (Port 8545)                 │
+│              rpc-shield (Port 8545)                     │
 │                                                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
-│  │   Identity   │  │     Rate     │  │    Stats     │ │
-│  │   Resolver   │  │   Limiter    │  │  Collector   │ │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘ │
-│         │                  │                  │         │
-│         └──────────┬───────┴──────────────────┘         │
-│                    ↓                                     │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
+│  │   Identity   │  │     Rate     │  │    Stats     │   │
+│  │   Resolver   │  │   Limiter    │  │  Collector   │   │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘   │
+│         │                  │                  │        │
+│         └──────────┬───────┴──────────────────┘        │
+│                    ↓                                    │
 │         ┌────────────────────┐                          │
 │         │   Proxy Handler    │                          │
 │         └──────────┬─────────┘                          │
@@ -39,108 +37,107 @@ rpc-shield
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Компоненты
+## Components
 
 ### 1. Identity Resolver
 
-**Ответственность:** Определение клиента по запросу
+**Responsibility:** resolve a client identity per request.
 
-**Логика:**
-1. Проверка `Authorization: Bearer <token>` заголовка
-2. Проверка `X-API-Key` заголовка  
-3. Fallback на IP-адрес клиента
+**Logic:**
+1. Check `Authorization: Bearer <token>` header
+2. Check `X-API-Key` header
+3. Fallback to client IP address
 
-**Типы идентификации:**
+**Identity types:**
 ```rust
 enum ClientIdentity {
-    ApiKey(String),      // Авторизованный пользователь
-    IpAddress(IpAddr),   // Анонимный клиент по IP
-    Anonymous,           // Неопределённый
+    ApiKey(String),      // Authenticated user
+    IpAddress(IpAddr),   // Anonymous client by IP
+    Anonymous,           // Undefined
 }
 ```
 
-**Приоритеты:**
-1. API ключ (высший приоритет - пользовательские лимиты)
-2. IP адрес (базовые лимиты)
+**Priority order:**
+1. API key (highest priority – per‑key limits)
+2. IP address (default limits)
 
 ### 2. Rate Limiter Engine
 
-**Алгоритм:** Token Bucket (через `governor` crate)
+**Algorithm:** Token Bucket (via `governor` crate)
 
-**Структура:**
+**Structure:**
 ```rust
 HashMap<String, RateLimiter>
 Key = "identity:method"
-// Примеры:
+// Examples:
 // "apikey:abc123:eth_call"
 // "ip:192.168.1.1:eth_getLogs"
 ```
 
-**Процесс проверки:**
-1. Извлечь identity + method
-2. Найти соответствующий лимит из конфига
-3. Проверить quota в соответствующем bucket
-4. Разрешить/отклонить запрос
+**Decision flow:**
+1. Extract identity + method
+2. Load the matching limit from config
+3. Check quota in the matching bucket
+4. Allow or reject the request
 
-**Уровни лимитов (приоритет сверху вниз):**
-1. API ключ + конкретный метод
-2. Конкретный метод (из config.method_limits)
-3. Default IP лимит
+**Limit precedence (top → bottom):**
+1. API key + specific method
+2. Method‑specific limit (`config.method_limits`)
+3. Default IP limit
 
-**Примеры квот:**
+**Quota examples:**
 ```yaml
-# 100 запросов в минуту
+# 100 requests per minute
 requests: 100
 period: "1m"
 
-# 5 запросов в секунду
+# 5 requests per second
 requests: 5
 period: "1s"
 
-# 1000 запросов в час
+# 1000 requests per hour
 requests: 1000
 period: "1h"
 ```
 
 ### 3. Proxy Handler
 
-**Ответственность:** Маршрутизация запросов
+**Responsibility:** route and proxy JSON‑RPC requests.
 
-**Процесс обработки:**
+**Request flow:**
 ```
-1. Принять HTTP POST запрос
+1. Accept HTTP POST request
    ↓
-2. Распарсить JSON-RPC тело
+2. Parse JSON-RPC body
    ↓
-3. Извлечь IP и заголовки
+3. Extract IP and headers
    ↓
-4. Определить ClientIdentity
+4. Resolve ClientIdentity
    ↓
-5. Проверить rate limit
+5. Check rate limit
    ↓
-6a. Лимит превышен → 429 Too Many Requests
-6b. Лимит OK → forward к RPC ноде
+6a. Limit exceeded → 429 Too Many Requests
+6b. Limit OK → forward to RPC node
    ↓
-7. Получить ответ от ноды
+7. Receive backend response
    ↓
-8. Вернуть ответ клиенту
+8. Return response to client
 ```
 
-**Коды ошибок:**
-- `-32005`: Rate limit exceeded (кастомный)
-- `-32603`: Internal error (стандартный JSON-RPC)
+**Error codes:**
+- `-32005`: Rate limit exceeded (custom)
+- `-32603`: Internal error (JSON‑RPC standard)
 - HTTP 429: Too Many Requests
 
 ### 4. Config Loader
 
-**Формат:** YAML
+**Format:** YAML
 
-**Структура:**
+**Structure:**
 ```yaml
 server:
   host: string
   port: u16
-  mode: "self-hosted" | "saas"
 
 rpc_backend:
   url: string
@@ -161,6 +158,14 @@ api_keys:
     enabled: bool
     limits: {...}
 
+api_key_tiers:
+  free:
+    <method_name>: { requests: u32, period: string }
+  pro:
+    <method_name>: { requests: u32, period: string }
+  enterprise:
+    <method_name>: { requests: u32, period: string }
+
 blocklist:
   ips: [string]
   enable_auto_ban: bool
@@ -171,67 +176,45 @@ monitoring:
   log_level: string
 ```
 
-### 5. Stats Collector (планируется)
+### 5. Metrics (Prometheus)
 
-**Метрики для сбора:**
+**Metrics collected:**
 ```
-- rpc_requests_total (counter)
-  labels: method, status, identity_type
-  
-- rate_limit_exceeded_total (counter)
-  labels: identity, method
-  
-- rpc_request_duration_seconds (histogram)
-  labels: method
-  
-- active_api_keys (gauge)
-  
-- blocked_ips_total (gauge)
+- rpc_shield_requests_total (counter)
+- rpc_shield_requests_allowed_total (counter)
+- rpc_shield_requests_rate_limited_total (counter)
+- rpc_shield_requests_blocked_total (counter)
+- rpc_shield_requests_auth_failed_total (counter)
+- rpc_shield_requests_upstream_fail_total (counter)
+- rpc_shield_requests_internal_fail_total (counter)
+- rpc_shield_request_duration_seconds (histogram)
 ```
 
-**Хранение:**
-- In-Memory для self-hosted (агрегаты за последние 24ч)
-- Redis для SaaS (распределённое состояние)
-- PostgreSQL для биллинга (полный audit trail)
+## Operating Mode
 
-## Режимы работы
+### Self‑Hosted
 
-### Self-Hosted Mode
+**Characteristics:**
+- YAML configuration
+- In‑memory limiters
+- Stats in stdout/logs
+- No database required
 
-**Характеристики:**
-- Конфигурация из YAML файла
-- Лимитеры в памяти процесса
-- Статистика в stdout/logs
-- Нет необходимости в БД
+**Use cases:**
+- Private RPC nodes
+- Internal enterprise networks
+- Development and testing
 
-**Use case:**
-- Частные RPC ноды
-- Внутренние корпоративные сети
-- Разработка и тестирование
+## Data Flows
 
-### SaaS Mode (в разработке)
-
-**Дополнительные компоненты:**
-- PostgreSQL: пользователи, подписки, биллинг
-- Redis: shared rate limiter state
-- Admin REST API: управление пользователями
-- Stripe integration: платежи
-
-**Use case:**
-- Публичный RPC сервис
-- API-as-a-Service
-- Монетизация нод
-
-## Потоки данных
-
-### Успешный запрос
+### Successful request
 
 ```
 Client → Proxy Handler
          ↓
-      Identity Resolver (определяет клиента)
+      Identity Resolver (client lookup)
          ↓
-      Rate Limiter (проверяет квоту)
+      Rate Limiter (quota check)
          ↓ PASS
       HTTP Client → Backend RPC
          ↓
@@ -240,7 +223,7 @@ Client → Proxy Handler
       Client
 ```
 
-### Отклонённый запрос (Rate Limited)
+### Rejected request (Rate Limited)
 
 ```
 Client → Proxy Handler
@@ -254,72 +237,51 @@ Client → Proxy Handler
       429 Response → Client
 ```
 
-## Масштабирование
+## Scaling
 
-### Вертикальное
+### Vertical
 
-**Single Instance:**
-- 10K-50K RPS на современном CPU
-- In-memory rate limiters (очень быстро)
-- Низкая latency (~1-2ms overhead)
+**Single instance:**
+- 10K‑50K RPS on modern CPU
+- In‑memory limiters (very fast)
+- Low latency (~1‑2ms proxy overhead)
 
-**Оптимизации:**
+**Optimizations:**
 - Async I/O (Tokio)
-- Zero-copy где возможно
-- Connection pooling к RPC ноде
+- Zero‑copy where possible
+- Connection pooling to RPC node
 
-### Горизонтальное (SaaS)
+## Security
 
-**Multi-Instance Setup:**
-```
-            Load Balancer
-                 |
-    ┌────────────┼────────────┐
-    ↓            ↓            ↓
- Proxy-1     Proxy-2     Proxy-3
-    |            |            |
-    └────────────┼────────────┘
-                 ↓
-            Redis Cluster
-         (shared limiter state)
-```
+### Rate limiting as first line of defense
 
-**Требования:**
-- Redis для синхронизации rate limiters
-- Session affinity не требуется
-- Health checks для auto-scaling
+**Protects against:**
+- DDoS attacks
+- Method spam (eth_getLogs)
+- Resource‑heavy requests
+- Bot traffic
 
-## Безопасность
+### Additional measures
 
-### Rate Limiting как первая линия защиты
+**IP blocklist:**
+- Static list of blocked IPs
+- Auto‑ban thresholds (planned)
 
-**Защита от:**
-- DDoS атак
-- Spam методов (eth_getLogs)
-- Ресурсоёмких запросов
-- Bot-трафика
+**Method filtering (future):**
+- Blacklist dangerous methods
+- Whitelist allowed methods
 
-### Дополнительные меры
+**Request validation:**
+- JSON‑RPC format
+- Payload size
+- Signature verification (optional)
 
-**IP Blocklist:**
-- Статический список заблокированных IP
-- Auto-ban по threshold (в разработке)
+## Extensions
 
-**Method Filtering (будущее):**
-- Blacklist опасных методов
-- Whitelist только разрешённых методов
-
-**Request Validation:**
-- JSON-RPC формат
-- Размер payload
-- Signature verification (опционально)
-
-## Расширения
-
-### WebSocket Support (планируется)
+### WebSocket Support (planned)
 
 ```rust
-// Новый handler для ws://
+// New handler for ws://
 async fn ws_proxy_handler() {
     // Upgrade connection
     // Forward eth_subscribe events
@@ -327,46 +289,46 @@ async fn ws_proxy_handler() {
 }
 ```
 
-### Admin API (планируется)
+### Admin API (planned)
 
 **Endpoints:**
 ```
-POST   /admin/api-keys              - Создать ключ
-GET    /admin/api-keys/:id          - Получить ключ
-PUT    /admin/api-keys/:id          - Обновить лимиты
-DELETE /admin/api-keys/:id          - Удалить ключ
-GET    /admin/stats/:id             - Статистика по ключу
-POST   /admin/blocklist/add         - Добавить IP в блоклист
+POST   /admin/api-keys              - Create key
+GET    /admin/api-keys/:id          - Get key
+PUT    /admin/api-keys/:id          - Update limits
+DELETE /admin/api-keys/:id          - Delete key
+GET    /admin/stats/:id             - Key statistics
+POST   /admin/blocklist/add         - Add IP to blocklist
 ```
 
-**Аутентификация:**
+**Authentication:**
 - JWT tokens
 - Admin API key
-- Role-based access control
+- Role‑based access control
 
-### Machine Learning Integration (будущее)
+### Machine Learning Integration (future)
 
-**Bot Detection:**
-- Анализ паттернов запросов
+**Bot detection:**
+- Pattern analysis
 - Anomaly detection
 - Automated ban recommendations
 
-**Traffic Prediction:**
-- Forecast usage для auto-scaling
+**Traffic prediction:**
+- Usage forecasting for auto‑scaling
 - Predictive rate limiting
 - Cost optimization
 
-## Мониторинг и Observability
+## Monitoring & Observability
 
-### Логирование
+### Logging
 
-**Уровни:**
-- ERROR: Критические ошибки
-- WARN: Rate limits, suspicious activity
-- INFO: Startup, config changes
-- DEBUG: Каждый запрос (dev only)
+**Levels:**
+- ERROR: critical failures
+- WARN: rate limits, suspicious activity
+- INFO: startup, config changes
+- DEBUG: per‑request logs (dev only)
 
-**Структура логов:**
+**Log structure:**
 ```json
 {
   "timestamp": "2025-01-28T10:30:00Z",
@@ -379,46 +341,46 @@ POST   /admin/blocklist/add         - Добавить IP в блоклист
 }
 ```
 
-### Метрики (Prometheus)
+### Prometheus metrics
 
-**Dashboard показатели:**
-- Requests per second по методам
+**Dashboard metrics:**
+- Requests per second by method
 - Rate limit hit rate
 - Backend latency
 - Active connections
 - Error rates
 
-### Алерты
+### Alerts
 
-**Критические:**
-- Backend RPC недоступен
-- Ошибки > 5%
+**Critical:**
+- Backend RPC unavailable
+- Errors > 5%
 - Latency > 1s
 
-**Предупреждения:**
-- Необычный рост трафика
-- Новые паттерны атак
-- Приближение к лимитам ресурсов
+**Warnings:**
+- Unusual traffic spikes
+- New attack patterns
+- Approaching resource limits
 
-## Производительность
+## Performance
 
-### Benchmarks (ожидаемые)
+### Benchmarks (expected)
 
 ```
 Throughput:  20,000 RPS (single instance)
 Latency:     p50: 2ms, p99: 10ms (proxy overhead)
 Memory:      ~100MB base + 1KB per active limiter
-CPU:         ~30% на 10K RPS (4 cores)
+CPU:         ~30% at 10K RPS (4 cores)
 ```
 
-### Профилирование
+### Profiling
 
 **Hotspots:**
-1. Rate limiter lookup - O(1) HashMap
-2. JSON parsing - используем serde
-3. HTTP forwarding - connection pooling
+1. Rate limiter lookup – O(1) HashMap
+2. JSON parsing – serde
+3. HTTP forwarding – connection pooling
 
-**Оптимизации:**
-- Batch processing для stats
-- LRU cache для config
-- Pre-compiled regex для validation
+**Optimizations:**
+- Batch processing for stats
+- LRU cache for config
+- Pre‑compiled regex for validation

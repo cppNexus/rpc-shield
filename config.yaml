@@ -1,7 +1,6 @@
 server:
   host: "0.0.0.0"
   port: 8545
-  mode: self-hosted
 
 rpc_backend:
   url: "http://localhost:8546"
@@ -51,6 +50,74 @@ api_keys:
       eth_getLogs:
         requests: 200
         period: "1m"
+
+api_key_tiers:
+  free:
+    eth_call:
+      requests: 20
+      period: "1m"
+    eth_getLogs:
+      requests: 10
+      period: "1m"
+    eth_blockNumber:
+      requests: 60
+      period: "1m"
+    eth_getBalance:
+      requests: 30
+      period: "1m"
+    eth_sendRawTransaction:
+      requests: 5
+      period: "1m"
+    eth_chainId:
+      requests: 120
+      period: "1m"
+    eth_getTransactionReceipt:
+      requests: 30
+      period: "1m"
+  pro:
+    eth_call:
+      requests: 200
+      period: "1m"
+    eth_getLogs:
+      requests: 100
+      period: "1m"
+    eth_blockNumber:
+      requests: 600
+      period: "1m"
+    eth_getBalance:
+      requests: 300
+      period: "1m"
+    eth_sendRawTransaction:
+      requests: 50
+      period: "1m"
+    eth_chainId:
+      requests: 1200
+      period: "1m"
+    eth_getTransactionReceipt:
+      requests: 300
+      period: "1m"
+  enterprise:
+    eth_call:
+      requests: 1000
+      period: "1m"
+    eth_getLogs:
+      requests: 500
+      period: "1m"
+    eth_blockNumber:
+      requests: 3000
+      period: "1m"
+    eth_getBalance:
+      requests: 1500
+      period: "1m"
+    eth_sendRawTransaction:
+      requests: 200
+      period: "1m"
+    eth_chainId:
+      requests: 6000
+      period: "1m"
+    eth_getTransactionReceipt:
+      requests: 1500
+      period: "1m"
 
 blocklist:
   ips:

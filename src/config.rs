@@ -7,6 +7,8 @@ pub struct Config {
     pub rpc_backend: RpcBackendConfig,
     pub rate_limits: RateLimitConfig,
     pub api_keys: HashMap<String, ApiKeyConfig>,
+    #[serde(default)]
+    pub api_key_tiers: HashMap<SubscriptionTier, HashMap<String, LimitRule>>,
     pub blocklist: BlocklistConfig,
     #[cfg(feature = "saas")]
     pub database: Option<DatabaseConfig>,
@@ -17,14 +19,6 @@ pub struct Config {
 pub struct ServerConfig {
     pub host: String,
     pub port: u16,
-    pub mode: OperationMode,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-pub enum OperationMode {
-    SelfHosted,
-    Saas,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,7 +46,7 @@ pub struct ApiKeyConfig {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum SubscriptionTier {
     Free,
@@ -98,7 +92,6 @@ mod tests {
             server: ServerConfig {
                 host: "0.0.0.0".to_string(),
                 port: 8545,
-                mode: OperationMode::SelfHosted,
             },
             rpc_backend: RpcBackendConfig {
                 url: "http://localhost:8546".to_string(),
@@ -112,6 +105,7 @@ mod tests {
                 method_limits: HashMap::new(),
             },
             api_keys: HashMap::new(),
+            api_key_tiers: HashMap::new(),
             blocklist: BlocklistConfig {
                 ips: vec![],
                 enable_auto_ban: false,

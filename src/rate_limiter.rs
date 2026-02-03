@@ -2,7 +2,7 @@ use crate::config::{LimitRule, RateLimitConfig};
 use crate::identity::ClientIdentity;
 use anyhow::{anyhow, Result};
 use governor::{
-    clock::DefaultClock,
+    clock::{Clock, DefaultClock},
     state::{InMemoryState, NotKeyed},
     Quota, RateLimiter as GovernorRateLimiter,
 };
@@ -14,6 +14,11 @@ use tokio::sync::RwLock;
 
 type LimiterMap =
     Arc<RwLock<HashMap<String, GovernorRateLimiter<NotKeyed, InMemoryState, DefaultClock>>>>;
+
+pub struct RateLimitDecision {
+    pub allowed: bool,
+    pub retry_after: Option<Duration>,
+}
 
 pub struct RateLimiter {
     limiters: LimiterMap,
@@ -28,10 +33,14 @@ impl RateLimiter {
         }
     }
 
-    /// Проверяет, разрешён ли запрос для данного клиента и метода
-    pub async fn check_rate_limit(&self, identity: &ClientIdentity, method: &str) -> Result<bool> {
+    pub async fn check_rate_limit_with_rule(
+        &self,
+        identity: &ClientIdentity,
+        method: &str,
+        custom_rule: Option<LimitRule>,
+    ) -> Result<RateLimitDecision> {
         let key = self.make_key(identity, method);
-        let limit_rule = self.get_limit_rule(identity, method);
+        let limit_rule = custom_rule.unwrap_or_else(|| self.get_limit_rule(identity, method));
 
         let mut limiters = self.limiters.write().await;
 
@@ -43,7 +52,20 @@ impl RateLimiter {
             GovernorRateLimiter::direct(quota)
         });
 
-        Ok(limiter.check().is_ok())
+        match limiter.check() {
+            Ok(_) => Ok(RateLimitDecision {
+                allowed: true,
+                retry_after: None,
+            }),
+            Err(not_until) => {
+                let clock = DefaultClock::default();
+                let wait = not_until.wait_time_from(clock.now());
+                Ok(RateLimitDecision {
+                    allowed: false,
+                    retry_after: Some(wait),
+                })
+            }
+        }
     }
 
     fn make_key(&self, identity: &ClientIdentity, method: &str) -> String {
@@ -141,15 +163,17 @@ mod tests {
         // Первые 5 запросов должны пройти
         for _ in 0..5 {
             assert!(limiter
-                .check_rate_limit(&identity, "eth_call")
+                .check_rate_limit_with_rule(&identity, "eth_call", None)
                 .await
-                .unwrap());
+                .unwrap()
+                .allowed);
         }
 
         // 6-й запрос должен быть отклонён
         assert!(!limiter
-            .check_rate_limit(&identity, "eth_call")
+            .check_rate_limit_with_rule(&identity, "eth_call", None)
             .await
-            .unwrap());
+            .unwrap()
+            .allowed);
     }
 }

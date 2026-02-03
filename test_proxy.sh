@@ -7,6 +7,16 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 PROXY_URL="http://localhost:8545"
+CONFIG_FILE="${CONFIG_FILE:-config.yaml}"
+STRICT_CONFIG="config-test-strict.yaml"
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo -e "${RED}✗ jq is not installed${NC}"
+  echo "Install jq to parse JSON output:"
+  echo "  macOS: brew install jq"
+  echo "  Ubuntu: sudo apt-get install -y jq"
+  exit 1
+fi
 
 echo "Testing rpc-shield
 
@@ -17,13 +27,21 @@ echo ""
 # Test 1: Health Check
 # ============================================================================
 echo -e "${BLUE}[1] Health Check${NC}"
-HEALTH=$(curl -s $PROXY_URL/health)
+HEALTH=$(curl -s --max-time 2 $PROXY_URL/health)
+if [ -z "$HEALTH" ]; then
+  echo -e "${RED}✗ Health check failed${NC}"
+  echo -e "${YELLOW}Hint:${NC} proxy is likely not running or not reachable."
+  echo "  Start: cargo run -- --config config.yaml"
+  echo "  Check: curl $PROXY_URL/health"
+  exit 1
+fi
 echo "$HEALTH" | jq .
 
 if echo "$HEALTH" | jq -e '.status == "ok"' > /dev/null 2>&1; then
   echo -e "${GREEN}✓ Health check passed${NC}"
 else
   echo -e "${RED}✗ Health check failed${NC}"
+  echo -e "${YELLOW}Hint:${NC} check logs and make sure the proxy is running."
   exit 1
 fi
 echo ""
@@ -42,13 +60,36 @@ if echo "$RESPONSE" | jq -e '.result' > /dev/null 2>&1; then
   echo -e "${GREEN}✓ RPC proxy working${NC}"
 else
   echo -e "${RED}✗ RPC proxy failed${NC}"
+  echo -e "${YELLOW}Hint:${NC} backend RPC might be down or misconfigured."
+  echo "  Check: rpc_backend.url in config.yaml"
+  echo "  Check: curl -s http://localhost:8546"
 fi
 echo ""
 
 # ============================================================================
 # Test 3: Rate Limiting Test
 # ============================================================================
-echo -e "${BLUE}[3] Rate Limiting Test (sending 15 rapid requests)${NC}"
+DEFAULT_LIMIT=""
+if [ -f "$CONFIG_FILE" ]; then
+  DEFAULT_LIMIT=$(awk '/default_ip_limit/{flag=1} flag && $1 ~ /requests:/ {print $2; exit}' "$CONFIG_FILE")
+fi
+
+if [ -z "$STRICT_TEST" ] && [ -f "$STRICT_CONFIG" ] && [[ "$DEFAULT_LIMIT" =~ ^[0-9]+$ ]] && [ "$DEFAULT_LIMIT" -gt 15 ]; then
+  CONFIG_FILE="$STRICT_CONFIG"
+  DEFAULT_LIMIT=$(awk '/default_ip_limit/{flag=1} flag && $1 ~ /requests:/ {print $2; exit}' "$CONFIG_FILE")
+  AUTO_STRICT=1
+fi
+
+TEST_REQUESTS=${RATE_LIMIT_TEST_COUNT:-15}
+if [ -n "$STRICT_TEST" ] && [ -n "$DEFAULT_LIMIT" ]; then
+  TEST_REQUESTS=$((DEFAULT_LIMIT + 5))
+fi
+if [ -n "$AUTO_STRICT" ] && [ -n "$DEFAULT_LIMIT" ]; then
+  TEST_REQUESTS=$((DEFAULT_LIMIT + 5))
+  echo -e "${YELLOW}Auto:${NC} using $CONFIG_FILE for rate-limit test. Restart proxy with this config if needed."
+fi
+
+echo -e "${BLUE}[3] Rate Limiting Test (sending $TEST_REQUESTS rapid requests)${NC}"
 echo "Testing with IP-based limiting..."
 echo ""
 
@@ -56,7 +97,7 @@ SUCCESS=0
 RATE_LIMITED=0
 BURST_USED=0
 
-for i in {1..15}; do
+for i in $(seq 1 "$TEST_REQUESTS"); do
   RESPONSE=$(curl -s -w "\n%{http_code}" -X POST $PROXY_URL \
     -H "Content-Type: application/json" \
     -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":'$i'}')
@@ -99,6 +140,10 @@ else
   echo "  - Limits too high in config"
   echo "  - Check: cat config.yaml | grep -A5 'default_ip_limit'"
   echo "  - Try: config-test-strict.yaml with lower limits"
+  if [ -n "$DEFAULT_LIMIT" ]; then
+    echo "  - Current default_ip_limit.requests = $DEFAULT_LIMIT (from $CONFIG_FILE)"
+    echo "  - Tip: STRICT_TEST=1 ./test_proxy.sh (sends default_limit+5 requests)"
+  fi
 fi
 
 echo ""
@@ -121,10 +166,10 @@ else
 fi
 
 # Test with Free API key (if configured)
-if grep -q "demo_free_key" config*.yaml 2>/dev/null; then
+if grep -q "demo_key_abc123" config*.yaml 2>/dev/null; then
   echo -n "  Free API key: "
   RESPONSE=$(curl -s -X POST $PROXY_URL \
-    -H "Authorization: Bearer demo_free_key_abc123" \
+    -H "Authorization: Bearer demo_key_abc123" \
     -H "Content-Type: application/json" \
     -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}')
   
@@ -136,10 +181,10 @@ if grep -q "demo_free_key" config*.yaml 2>/dev/null; then
 fi
 
 # Test with Pro API key (if configured)
-if grep -q "pro_key" config*.yaml 2>/dev/null; then
+if grep -q "premium_key_xyz789" config*.yaml 2>/dev/null; then
   echo -n "  Pro API key: "
   RESPONSE=$(curl -s -X POST $PROXY_URL \
-    -H "Authorization: Bearer pro_key_xyz789" \
+    -H "Authorization: Bearer premium_key_xyz789" \
     -H "Content-Type: application/json" \
     -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}')
   

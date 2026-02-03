@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  geth:
+    image: ethereum/client-go:latest
+    ports:
+      - "${GETH_PORT:-8546}:8546"
+    command: >
+      --http --http.addr=0.0.0.0 --http.port=8546
+      --http.api=eth,net,web3
+      --syncmode=snap
+
+  rpc-shield:
+    build: .
+    ports:
+      - "${RPC_SHIELD_PORT:-8545}:8545"
+    volumes:
+      - ./config.yaml:/app/config.yaml
+    command: ["/app/rpc-shield", "--config", "/app/config.yaml"]
+    depends_on:
+      - geth
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - rpc-shield

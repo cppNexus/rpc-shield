@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # RPC Shield Proxy
+  rpc-shield:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8545:8545"  # Main proxy port
+      - "8555:8555"  # Admin API
+      - "9090:9090"  # Prometheus metrics
+    environment:
+      - RUST_LOG=info,rpc_shield=debug
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
+      - ethereum-node
+    networks:
+      - rpc-shield-net
+    restart: unless-stopped
+
+  # PostgreSQL for SaaS features
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: rpc_shield
+      POSTGRES_USER: rpc_shield
+      POSTGRES_PASSWORD: secure_password_change_me
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - rpc-shield-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rpc_shield"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for distributed rate limiting
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - rpc-shield-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Mock Ethereum Node (for testing)
+  ethereum-node:
+    image: ghcr.io/foundry-rs/foundry:latest
+    command: anvil --host 0.0.0.0 --port 8546
+    ports:
+      - "8546:8546"
+    networks:
+      - rpc-shield-net
+    restart: unless-stopped
+
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - rpc-shield-net
+    restart: unless-stopped
+
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - rpc-shield-net
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  rpc-shield-net:
+    driver: bridge
