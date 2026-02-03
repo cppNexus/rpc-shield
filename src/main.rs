@@ -15,8 +15,8 @@ use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::Config;
-use crate::proxy::{health_check, proxy_handler, ProxyState};
 use crate::metrics::metrics_handler;
+use crate::proxy::{health_check, proxy_handler, ProxyState};
 use crate::rate_limiter::RateLimiter;
 
 #[derive(Parser, Debug)]
@@ -83,7 +83,10 @@ async fn main() -> Result<()> {
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
-    let metrics_addr = format!("{}:{}", config.server.host, config.monitoring.prometheus_port);
+    let metrics_addr = format!(
+        "{}:{}",
+        config.server.host, config.monitoring.prometheus_port
+    );
     let metrics_app = Router::new().route("/metrics", get(metrics_handler));
     let metrics_listener = tokio::net::TcpListener::bind(&metrics_addr).await?;
     tokio::spawn(async move {

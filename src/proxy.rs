@@ -8,12 +8,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::time::Instant;
 use std::sync::Arc;
+use std::time::Instant;
 
 use crate::config::ApiKeyConfig;
-use crate::identity::ClientIdentity;
 use crate::identity::AuthError;
+use crate::identity::ClientIdentity;
 use crate::metrics;
 use crate::metrics::Outcome;
 use crate::rate_limiter::RateLimiter;
@@ -51,7 +51,8 @@ pub struct ProxyState {
     pub rpc_backend_url: String,
     pub http_client: reqwest::Client,
     pub api_keys: HashMap<String, ApiKeyConfig>,
-    pub api_key_tiers: HashMap<crate::config::SubscriptionTier, HashMap<String, crate::config::LimitRule>>,
+    pub api_key_tiers:
+        HashMap<crate::config::SubscriptionTier, HashMap<String, crate::config::LimitRule>>,
     pub blocklist: HashSet<IpAddr>,
 }
 
@@ -64,12 +65,7 @@ pub async fn proxy_handler(
     let started = Instant::now();
     let client_ip = addr.ip();
     if state.blocklist.contains(&client_ip) {
-        let response = error_response(
-            StatusCode::FORBIDDEN,
-            -32001,
-            "IP blocked",
-            req.id.clone(),
-        );
+        let response = error_response(StatusCode::FORBIDDEN, -32001, "IP blocked", req.id.clone());
         metrics::record(Outcome::Blocked, started.elapsed());
         return response;
     }
@@ -133,12 +129,7 @@ pub async fn proxy_handler(
                 Err(e) => {
                     tracing::error!("Failed to forward request: {}", e);
                     metrics::record(Outcome::UpstreamFail, started.elapsed());
-                    error_response(
-                        StatusCode::BAD_GATEWAY,
-                        -32007,
-                        "Upstream error",
-                        req.id,
-                    )
+                    error_response(StatusCode::BAD_GATEWAY, -32007, "Upstream error", req.id)
                 }
             }
         }
@@ -157,18 +148,21 @@ pub async fn proxy_handler(
             );
             if let Some(wait) = decision.retry_after {
                 let seconds = wait.as_secs_f64().ceil().max(1.0) as u64;
-                response.headers_mut().insert(
-                    "Retry-After",
-                    seconds.to_string().parse().unwrap(),
-                );
+                response
+                    .headers_mut()
+                    .insert("Retry-After", seconds.to_string().parse().unwrap());
             }
             metrics::record(Outcome::RateLimited, started.elapsed());
             response
         }
         Err(e) => {
             tracing::error!("Rate limiter error: {}", e);
-            let response =
-                error_response(StatusCode::INTERNAL_SERVER_ERROR, -32603, "Internal error", req.id);
+            let response = error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                -32603,
+                "Internal error",
+                req.id,
+            );
             metrics::record(Outcome::InternalFail, started.elapsed());
             response
         }

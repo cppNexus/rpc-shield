@@ -67,11 +67,19 @@ impl Metrics {
 
         registry.register(Box::new(requests_total.clone())).unwrap();
         registry.register(Box::new(allowed_total.clone())).unwrap();
-        registry.register(Box::new(rate_limited_total.clone())).unwrap();
+        registry
+            .register(Box::new(rate_limited_total.clone()))
+            .unwrap();
         registry.register(Box::new(blocked_total.clone())).unwrap();
-        registry.register(Box::new(auth_failed_total.clone())).unwrap();
-        registry.register(Box::new(upstream_fail_total.clone())).unwrap();
-        registry.register(Box::new(internal_fail_total.clone())).unwrap();
+        registry
+            .register(Box::new(auth_failed_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(upstream_fail_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(internal_fail_total.clone()))
+            .unwrap();
         registry
             .register(Box::new(request_duration_seconds.clone()))
             .unwrap();

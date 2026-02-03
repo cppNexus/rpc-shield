@@ -162,18 +162,22 @@ mod tests {
 
         // Первые 5 запросов должны пройти
         for _ in 0..5 {
-            assert!(limiter
-                .check_rate_limit_with_rule(&identity, "eth_call", None)
-                .await
-                .unwrap()
-                .allowed);
+            assert!(
+                limiter
+                    .check_rate_limit_with_rule(&identity, "eth_call", None)
+                    .await
+                    .unwrap()
+                    .allowed
+            );
         }
 
         // 6-й запрос должен быть отклонён
-        assert!(!limiter
-            .check_rate_limit_with_rule(&identity, "eth_call", None)
-            .await
-            .unwrap()
-            .allowed);
+        assert!(
+            !limiter
+                .check_rate_limit_with_rule(&identity, "eth_call", None)
+                .await
+                .unwrap()
+                .allowed
+        );
     }
 }
